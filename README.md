@@ -76,7 +76,7 @@ DSH 的出厂设计是「所有用户数据放在同一个 `$DSH_HOME` 下」，
 
 用 `dsh-memory@0.1.0` 实现「模型自己决定记什么、下次会话自动想起」：模型通过 `memory_write` / `memory_search` / `memory_forget` 三个工具维护一个 SQLite 库（FTS5 全文检索），并在每次请求里注入「最近若干条 + 置顶条目」。它不在 DSH 官方 bundle 里，是外部插件。
 
-安装由 `install.sh` / `install.ps1` 第 6 步自动完成（对每个已初始化的 `profiles/*/` 各做一次，幂等）：
+安装由 `install.sh` / `install.ps1` 第 6 步自动完成（对每个已初始化的 `profiles/*/` 各做一次，幂等）。但**新机器上第一次跑脚本时装不上**：仓库只跟踪 `profiles/*/cordis.patch.yml`，profile 本体（`package.json`、`pnpm-lock.yaml`、`node_modules/`）由 DSH 首次启动时创建，此时第 6 步只会打印「profile 还没初始化…本次跳过」。启动一次 DSH（Desktop 或 `dsh --profile <名字>`）后**再跑一次** `install.sh` 就会自动装上；之后每次 `git pull` 也会由 `hooks/post-merge` 自动重跑。`desktop` 是例外，见下面的「profile 分两类」。
 
 ```sh
 dsh plugin --profile desktop allow-version dsh-memory@0.1.0 --dsh-version <dsh -V> --accept-risk
@@ -140,6 +140,8 @@ cd "$env:USERPROFILE\.dsh"; .\install.ps1
 ```
 
 之后**重开终端**（让 `DSH_HOME` 生效）；如果之前已经启动过 Desktop，也重启一次。
+
+**记忆插件需要跑两次脚本**：第一次运行时 `profiles/*/` 还不存在（第 6 步只会提示「本次跳过」）。启动一次 DSH 生成 profile、退出后再跑一次 `./install.sh`，才会装上；`desktop` profile 例外（CLI 无权管理，见「长期记忆 → profile 分两类」）。
 
 首次这两条命令无法再自动化：脚本必须先存在于 home 里，而 home 的位置本身由 `DSH_HOME` 决定。
 
@@ -233,7 +235,7 @@ cd ~/Workspace/deepseek-harness && pnpm run dev:desktop
 5. 启动 DSH 后，模型列表里能看到 `tx-gateway` 与 `tx-gateway-completions` 两套路由的模型
 6. 重启后会话列表里能看到历史会话（证明确实读的是新数据根）
 7. macOS 上启用 Playwriter 时，工具列表里出现 `mcp__playwriter__execute`
-8. 记忆插件生效：`install.sh` 第 6 步打印 `已安装 dsh-memory@0.1.0`（`desktop` profile 打印的是"由 Desktop 应用独占管理"，需按「长期记忆」一节手动装）；重启后让它记一条事实，另开一个会话问它，能答出来；库在 `~/.dsh-data/memory/memory.db`（仓库内**不应**出现 `memory/`）
+8. 记忆插件生效：先启动过一次 DSH 再跑 `install.sh`（新机器第一次跑只会提示「本次跳过」），第 6 步应打印 `已安装 dsh-memory@0.1.0`（`desktop` profile 打印的是"由 Desktop 应用独占管理"，需按「长期记忆」一节手动装）；重启后让它记一条事实，另开一个会话问它，能答出来；库在 `~/.dsh-data/memory/memory.db`（仓库内**不应**出现 `memory/`）
 
 ## 已知限制
 

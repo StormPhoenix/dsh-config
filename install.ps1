@@ -208,7 +208,13 @@ if (-not $dshMode) {
       }
       $touched++
     }
-    if ($touched -eq 0) { Warn "没有已初始化的 profile（需要 profiles\*\package.json），跳过 $memPkg" }
+    if ($touched -eq 0) {
+      Warn "profile 还没初始化（profiles\*\package.json 不存在），本次跳过 $memPkg"
+      Say "   新机器首次运行时这是正常的：profile 由 DSH 自己创建，仓库只跟踪 profiles\*\cordis.patch.yml。"
+      Say "   启动一次 DSH（Desktop 应用，或 dsh --profile <名字>）后再跑一次本脚本，就会自动装上；"
+      Say "   之后每次 git pull 也会由 hooks/post-merge 自动重跑。"
+      Say "   注意：desktop profile 即使已初始化，CLI 也无权管理，仍需应用内安装或手动步骤（见 README）。"
+    }
   }
   $env:DSH_HOME = $prevHome
   $ErrorActionPreference = $prevEap
