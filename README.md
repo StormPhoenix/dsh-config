@@ -95,6 +95,26 @@ cd ~/.dsh && git pull
 | Windows 上某个插件行报错 | Windows 通常没有 `HOME`，表达式要写成 `!!js (process.env.HOME ?? process.env.USERPROFILE)` |
 | 生效了但某些行被覆盖 | 检查机器层是否也定义了同一个 `id`（机器层优先级更高） |
 
+## 切换 home 后如何生效（每台机器只做一次）
+
+`install.sh` 会把 `export DSH_HOME=...` 写进 `~/.zprofile`（Windows 写进用户环境变量）。但 Desktop 应用只在**启动时**确定 home，所以必须重启，而且启动方式有讲究：
+
+| 启动方式 | home 来源 | 切换后怎么办 |
+|---|---|---|
+| 打包版 Desktop（双击图标） | 默认就是 `~/.dsh`，与本仓库位置天然一致 | 直接重启应用即可 |
+| 开发版 Desktop（`pnpm run dev:desktop`） | `dev.ts` 启动时读 `process.env.DSH_HOME`，并把它**写进生成的 `Harness Dev.app` 启动脚本** | **必须新开终端**再执行 `pnpm run dev:desktop` |
+
+开发版特别注意：**不要直接双击旧的 `Harness Dev.app`**，它内部写死的还是生成时的旧 home。正确步骤是：
+
+```sh
+# 1. 完全退出 Desktop
+# 2. 新开一个终端（让 ~/.zprofile 里的 DSH_HOME 生效）
+echo $DSH_HOME            # 应输出 /Users/<你>/.dsh
+cd ~/Workspace/deepseek-harness && pnpm run dev:desktop
+```
+
+原因见 DSH 源码仓库的 `apps/desktop/README.md`：Desktop 会读取登录 shell 的环境，但**启动方自有的 `DSH_*` 变量不会被 shell 值覆盖**，因为它在读取之前就已经用 `DSH_HOME` 解析好了路径。
+
 ## 已知限制
 
 - **通过界面安装的 bundle（插件包）不会跟着同步。** `profiles/desktop/package.json` 里的 `dsh.profile.bundles` 由 DSH 自己维护，容易被 `pnpm install` 改写，所以不在跟踪范围内。如果你以后用 `dsh plugin add` 装了外部插件包，需要在每台机器上分别装一次。纯配置（本仓库目前的全部内容）不受影响。

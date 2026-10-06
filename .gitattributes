@@ -1,0 +1,7 @@
+# 跨平台换行符统一：Windows 上 core.autocrlf=true 会把 shell 脚本转成 CRLF，
+# 导致 `#!/bin/sh\r` 无法执行、`hooks/post-merge` 直接失效。
+* text=auto eol=lf
+
+install.sh        text eol=lf
+hooks/post-merge  text eol=lf
+install.ps1       text eol=crlf
