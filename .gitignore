@@ -23,5 +23,11 @@
 !machines/**
 !profiles/*/cordis.patch.yml
 
+# 顺序重要：下面这条必须排在 !profiles/*/cordis.patch.yml 之后。
+# `pnpm dsh --profile headless ...` 之类的 CLI 探测会在 home 里生成一个空的
+# profile 脚手架（默认 patch 是 `[]`），不需要跟踪，否则每次 CLI 运行都污染
+# git status。将来若要跟踪别的 profile，按同样格式加 `!profiles/<名字>/**`。
+profiles/headless/
+
 # 机器层由 install.sh / install.ps1 从 machines/<os>.cordis.patch.yml 生成，
 # 不直接跟踪（每台机器的内容不同，跟踪它会互相覆盖）。上面 `*` 已经忽略它。
