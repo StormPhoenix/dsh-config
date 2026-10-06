@@ -176,3 +176,4 @@ if [ "$MACHINE_OS" = "macos" ] || [ "$MACHINE_OS" = "linux" ]; then
 else
   printf '\n'
 fi
+printf '备份数据（建议定期执行）：./backup.sh   数据根：%s\n' "$DATA_DIR"

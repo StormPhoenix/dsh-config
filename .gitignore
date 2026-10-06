@@ -1,11 +1,15 @@
 # dsh-config 仓库的跟踪白名单
 #
-# 这个目录同时是 DSH 的 home（$DSH_HOME），里面混着大量本机运行时数据
-# （sessions / storages / attachments / .credentials.yaml / node_modules）。
+# 这个目录同时是 DSH 的 home（$DSH_HOME），里面混着运行时产物
+# （dsh-runtimes / profiles/*/node_modules / settings.yaml 等）。
 # 规则采用「全部忽略 + 显式放行」，只有下面列出的配置与脚本会进版本库。
 #
-# ⚠️ 永远不要在这个仓库里运行 `git clean -xdf`：会连忽略的文件一起删除，
-#    包括你的会话记录和凭据。README.md 有同样的警告。
+# 不可再生的数据（会话 / 附件 / 存储状态 / 凭据）已不在这个目录里，而是放在
+# 仓库之外的数据根（默认 <本仓库目录>-data，即 ~/.dsh-data），见 README 的
+# 「数据分根」。所以在本目录里运行任何 git 命令都不会波及它们。
+#
+# 仍然不要运行 `git clean -xdf`：它会删掉下面那些被忽略的**可再生产物**
+# （dsh-runtimes 约 370MB、profile 依赖等），虽然重启后能自动重装。
 *
 !*/
 !.gitignore
@@ -13,6 +17,8 @@
 !README.md
 !install.sh
 !install.ps1
+!backup.sh
+!backup.ps1
 !hooks/**
 !machines/**
 !profiles/*/cordis.patch.yml

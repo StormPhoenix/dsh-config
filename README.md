@@ -10,6 +10,7 @@ DeepSeek Harness（DSH）的个人配置仓库。**这个目录同时就是 DSH 
 $DSH_HOME/                          # = 本仓库的 clone 目录，例如 ~/.dsh
 ├── .gitignore                      # 白名单：只跟踪配置与脚本
 ├── install.sh / install.ps1        # 幂等安装脚本（首次 + 每次 pull 后运行）
+├── backup.sh / backup.ps1          # 数据备份（打包数据根，默认保留最近 10 份）
 ├── hooks/post-merge                # git hook：pull 之后自动执行上面的脚本
 ├── machines/
 │   ├── macos.cordis.patch.yml      # macOS 机器层（含数据分根覆盖行）
@@ -187,12 +188,23 @@ cd ~/Workspace/deepseek-harness && pnpm run dev:desktop
 
 真正需要备份的只有两样：
 
+| 内容 | 载体 |
+|---|---|
+| 配置 | git 远端（`git@github.com:StormPhoenix/dsh-config.git`）—— `git push` 即已备份 |
+| 数据 | `~/.dsh-data`（会话、附件、存储、凭据）—— 用下面的脚本 |
+
 ```sh
-# 1) 配置：已在 git 远端（git@github.com:StormPhoenix/dsh-config.git）
-# 2) 数据：会话、附件、存储、凭据 —— 全在这一个目录里
-tar -czf ~/dsh-data-$(date +%Y%m%d).tar.gz -C ~ .dsh-data
+./backup.sh                       # 备份到 ~/dsh-backups，保留最近 10 份
+./backup.sh --keep 20             # 调整保留份数
+./backup.sh --out /Volumes/USB    # 备份到外部盘
+./backup.sh --list                # 查看已有备份
 ```
 
-注意 `.credentials.yaml` 是明文：打包文件要放在安全位置，或者干脆改用环境变量让凭据不落盘。
+Windows 用 `.\backup.ps1`（参数相同；优先产出 `.tar.gz`，系统无 `tar` 时退回 `.zip`）。
+
+- 归档**含明文 `~/.dsh-data/.credentials.yaml`**，所以脚本把备份目录设为 `700`、归档设为 `600`；仍请把它存在安全位置。
+- 应用运行中备份是安全的（逐文件读取），但正在写入的那个会话，最后几条事件可能不完整；需要完全一致时先退出 DSH 再备份。
+- 恢复：先完全退出 DSH，再执行脚本末尾打印的命令（`rm -rf <数据根> && tar -xzf <归档> -C <数据根的父目录>`）。
+- 建议节奏：改完配置、装过插件、或有重要会话之后跑一次即可 —— 数据量很小（当前约 8MB）。
 
 首次迁移前的备份保留在 `~/.dsh-backup-<时间戳>/`（含当时的 `cordis.patch.yml`、历史 `.bak-*` 和明文 `credentials.yaml`）。确认新方案稳定后可自行删除。

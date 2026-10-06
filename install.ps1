@@ -151,3 +151,4 @@ foreach ($key in @('TX_GATEWAY_API_KEY', 'DEEPSEEK_API_KEY')) {
 }
 
 Write-Host "`n完成。数据分根与机器层改动需要重启 Desktop 才会生效；首次安装还需重开终端让 DSH_HOME 生效。"
+Write-Host "备份数据（建议定期执行）：.\backup.ps1   数据根：$DataDir"
