@@ -1,13 +1,20 @@
 # dsh-config · 机器层（macOS）
 #
-# install.sh 会把本文件复制成 $DSH_HOME/cordis.patch.yml。
-# 该层对本机所有 profile 生效，且覆盖共享层的同名行。
-# 绝对路径只允许出现在这里。
+# install.sh 会把本文件做替换后写成 $DSH_HOME/cordis.patch.yml：
+#   __DSH_DATA__ → 本机数据根（默认 <本仓库目录>-data，即 ~/.dsh-data）
+# 该层对本机所有 profile 生效，且按行覆盖共享层。绝对路径只允许出现在这里。
 #
-# Playwriter：通过 Chrome 扩展（chrome.debugger）驱动你已登录的真实 Chrome，
-# 绕开 Chrome 136+ 对默认数据目录禁用 --remote-debugging-port 的限制。
-# 扩展安装位置：~/.local/lib/node_modules/playwriter/dist/extension
-# 工具名：mcp__playwriter__execute / mcp__playwriter__reset
+# ── 数据分根（为什么）────────────────────────────────────────────────────
+# DSH 默认把所有用户数据放在 $DSH_HOME 下，而 $DSH_HOME 同时是本配置仓库的工作树。
+# 因此仓库里的 `git clean -x` 会连会话记录、凭据、附件一起删除。
+# 下面 5 行把「不可再生」的数据改写到仓库之外的数据根，
+# 使任何 git 命令都无法再触达它们；留在仓库里的只剩配置和可再生产物。
+#
+# 依据：这 5 个字段都是各插件在 bundle 层就已暴露的配置项 ——
+#   session-persistence-jsonl.root / attachment-local.dshHome / storage-json.root
+#   / credentials-local.path / spill-local.root
+#
+# 补丁是「整行替换」：这里必须重述该行所需的键（其余键用 schema 默认值）。
 - insert:
     - id: playwriter-mcp
       name: "@deepseek-ai/dsh-mcp-client"
@@ -18,3 +25,29 @@
         args: [ "/Users/jiaxianwang/.local/lib/node_modules/playwriter/bin.js" ]
         cwd: !!js process.env.HOME
         toolCallTimeoutMs: 300000
+
+# ── 数据分根：把不可再生数据指向仓库之外的数据根 ─────────────────────────
+- id: session-persistence-jsonl
+  name: "@deepseek-ai/dsh-session-persistence-jsonl"
+  config:
+    root: __DSH_DATA__/sessions
+
+- id: attachment-local
+  name: "@deepseek-ai/dsh-attachment-local"
+  config:
+    dshHome: __DSH_DATA__
+
+- id: storage-json
+  name: "@deepseek-ai/dsh-storage-json"
+  config:
+    root: __DSH_DATA__/storages
+
+- id: credentials
+  name: "@deepseek-ai/dsh-credentials-local"
+  config:
+    path: __DSH_DATA__/.credentials.yaml
+
+- id: spill-local
+  name: "@deepseek-ai/dsh-spill-local"
+  config:
+    root: __DSH_DATA__/spill

@@ -1,10 +1,12 @@
 # dsh-config installer (Windows) —— 幂等脚本，与 install.sh 行为一致。
 #
 # 首次安装与每次 `git pull` 之后执行同一个脚本，由 hooks/post-merge 自动调用。
-# 只做配置落位与体检：不下载可执行文件，不写入任何密钥。
+# 只做三件事：把机器专属配置落位（含数据分根）、迁移既有数据、体检外部工具与密钥。
+# 不下载可执行文件，不写入任何密钥。
 $ErrorActionPreference = 'Stop'
 
 $HomeDir = $PSScriptRoot
+$DataDir = "$HomeDir-data"
 
 function Say  ($m) { Write-Host $m }
 function Step ($m) { Write-Host "`n== $m" }
@@ -12,8 +14,9 @@ function Ok   ($m) { Write-Host "   ok    $m" }
 function Warn ($m) { Write-Host "   warn  $m" -ForegroundColor Yellow }
 
 # ---------------------------------------------------------------------------
-Step "1/6 解析 DSH home"
+Step "1/7 解析 DSH home"
 Say "   本仓库（= DSH home）: $HomeDir"
+Say "   数据根（仓库之外）:  $DataDir"
 if ($env:DSH_HOME) {
   if ($env:DSH_HOME.TrimEnd('\') -ieq $HomeDir.TrimEnd('\')) {
     Ok "DSH_HOME 已指向本仓库"
@@ -25,7 +28,7 @@ if ($env:DSH_HOME) {
 }
 
 # ---------------------------------------------------------------------------
-Step "2/6 持久化 DSH_HOME（用户级环境变量）"
+Step "2/7 持久化 DSH_HOME（用户级环境变量）"
 $persisted = [Environment]::GetEnvironmentVariable('DSH_HOME', 'User')
 if ($persisted -and $persisted.TrimEnd('\') -ieq $HomeDir.TrimEnd('\')) {
   Ok "用户环境变量 DSH_HOME 已正确设置"
@@ -39,7 +42,7 @@ if ($persisted -and $persisted.TrimEnd('\') -ieq $HomeDir.TrimEnd('\')) {
 }
 
 # ---------------------------------------------------------------------------
-Step "3/6 安装 git hook（pull 后自动执行本脚本）"
+Step "3/7 安装 git hook（pull 后自动执行本脚本）"
 if (Test-Path (Join-Path $HomeDir '.git')) {
   git -C $HomeDir config core.hooksPath hooks
   Ok "core.hooksPath = hooks"
@@ -48,23 +51,78 @@ if (Test-Path (Join-Path $HomeDir '.git')) {
 }
 
 # ---------------------------------------------------------------------------
-Step "4/6 生成机器层 `$DSH_HOME/cordis.patch.yml`"
+Step "4/7 准备数据根（仓库之外的不可再生数据）"
+# 会话记录/附件/存储/凭据都放在这里，而不是 $DSH_HOME 内。
+# 于是仓库里的 `git clean -x` 之类的操作永远不可能删到它们。
+if (Test-Path $DataDir) {
+  Ok "$DataDir 已存在"
+} else {
+  New-Item -ItemType Directory -Path $DataDir | Out-Null
+  Ok "已创建 $DataDir"
+}
+# 一次性迁移：只在目标缺失时复制，绝不覆盖已有数据（幂等，可安全重复执行）
+foreach ($sub in @('sessions', 'attachments', 'storages')) {
+  $from = Join-Path $HomeDir $sub
+  $to = Join-Path $DataDir $sub
+  if ((Test-Path $from) -and -not (Test-Path $to)) {
+    Copy-Item $from $to -Recurse
+    Ok "已迁移 $sub -> $to"
+  }
+}
+$credsData = Join-Path $DataDir '.credentials.yaml'
+$credsHome = Join-Path $HomeDir '.credentials.yaml'
+if (Test-Path $credsData) {
+  Ok "凭据已在数据根：$credsData"
+} elseif (Test-Path $credsHome) {
+  Copy-Item $credsHome $credsData
+  Ok "已迁移 .credentials.yaml 到数据根（请确认其 ACL 仅本人可读）"
+} else {
+  Ok "尚无凭据文件（可用用户环境变量提供密钥）"
+}
+if ((Test-Path (Join-Path $HomeDir 'sessions')) -and (Test-Path (Join-Path $DataDir 'sessions'))) {
+  Say "   提示：$HomeDir\sessions 仍在原处，仅作安全网；确认新布局正常后可自行删除"
+}
+
+# ---------------------------------------------------------------------------
+Step "5/7 生成机器层 `$DSH_HOME/cordis.patch.yml`"
 $src = Join-Path $HomeDir 'machines\windows.cordis.patch.yml'
 $dst = Join-Path $HomeDir 'cordis.patch.yml'
 if (Test-Path $src) {
-  $same = (Test-Path $dst) -and ((Get-FileHash $src).Hash -eq (Get-FileHash $dst).Hash)
-  if ($same) {
-    Ok "机器层已是最新（windows）"
-  } else {
-    Copy-Item $src $dst -Force
+  # __DSH_DATA__ → 数据根（正斜杠，Node 在 Windows 上同样接受）
+  $dataYaml = $DataDir.Replace('\', '/')
+  # -replace 的替换串里 $ 有特殊含义，需转义为 $$；其余字符原样
+  $replacement = $dataYaml.Replace('$', '$$')
+  $content = (Get-Content $src -Raw) -replace '__DSH_DATA__', $replacement
+  $content = ($content -replace "`r`n", "`n")
+  $changed = -not (Test-Path $dst)
+  if (-not $changed) {
+    $changed = ((Get-Content $dst -Raw) -ne $content)
+  }
+  if ($changed) {
+    # 无 BOM 写入，避免 YAML 解析器读到 BOM
+    [System.IO.File]::WriteAllText($dst, $content, (New-Object System.Text.UTF8Encoding($false)))
     Ok "已由 machines\windows.cordis.patch.yml 生成"
+  } else {
+    Ok "机器层已是最新（windows）"
+  }
+  # 自检：数据分根覆盖行是否齐全（行 id 一旦被 DSH 改名，这里会响铃）
+  $missing = @()
+  foreach ($row in @('session-persistence-jsonl', 'attachment-local', 'storage-json', 'credentials', 'spill-local')) {
+    if (-not (Select-String -Path $dst -Pattern "id: $row" -Quiet)) { $missing += $row }
+  }
+  if (Select-String -Path $dst -Pattern '__DSH_DATA__' -Quiet) {
+    Warn "机器层里仍有未替换的 __DSH_DATA__ 占位符，请检查 machines\windows.cordis.patch.yml"
+  } elseif ($missing.Count -gt 0) {
+    Warn "机器层缺少数据分根覆盖行：$($missing -join ', ') —— 这些数据会退回 `$DSH_HOME 内"
+  } else {
+    Ok "数据分根覆盖行齐全（5/5），数据根 = $DataDir"
   }
 } else {
   Warn "缺少 machines\windows.cordis.patch.yml，机器层未生成"
 }
 
 # ---------------------------------------------------------------------------
-Step "5/6 外部工具体检（只报告，不安装）"
+Step "6/7 外部工具体检（只报告，不安装）"
 if (Get-Command node -ErrorAction SilentlyContinue) {
   Ok "node: $((Get-Command node).Source)"
 } else {
@@ -78,17 +136,18 @@ if (Test-Path $pw) {
 }
 
 # ---------------------------------------------------------------------------
-Step "6/6 密钥体检（只报告，绝不写入）"
+Step "7/7 密钥体检（只报告，绝不写入）"
 foreach ($key in @('TX_GATEWAY_API_KEY', 'DEEPSEEK_API_KEY')) {
   $envValue = [Environment]::GetEnvironmentVariable($key, 'User')
-  $creds = Join-Path $HomeDir '.credentials.yaml'
   if ($envValue) {
     Ok "$key 已从用户环境变量提供"
-  } elseif ((Test-Path $creds) -and (Select-String -Path $creds -Pattern $key -Quiet)) {
-    Ok "$key 已在本机 .credentials.yaml 中"
+  } elseif ((Test-Path $credsData) -and (Select-String -Path $credsData -Pattern $key -Quiet)) {
+    Ok "$key 已在数据根 .credentials.yaml 中"
+  } elseif ((Test-Path $credsHome) -and (Select-String -Path $credsHome -Pattern $key -Quiet)) {
+    Ok "$key 在旧位置 .credentials.yaml 中（配置已指向数据根，注意迁移）"
   } else {
-    Warn "$key 缺失：设置用户环境变量，或确认 `$DSH_HOME/.credentials.yaml` 已同步"
+    Warn "$key 缺失：设置用户环境变量，或确认 $DataDir\.credentials.yaml 已同步"
   }
 }
 
-Write-Host "`n完成。若这是首次安装，请重新打开终端并重启 Desktop。"
+Write-Host "`n完成。数据分根与机器层改动需要重启 Desktop 才会生效；首次安装还需重开终端让 DSH_HOME 生效。"

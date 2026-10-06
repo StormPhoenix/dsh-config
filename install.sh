@@ -4,10 +4,12 @@
 # 首次安装与每次 `git pull` 之后执行的是同一个脚本，由 hooks/post-merge 自动调用，
 # 也可以随时手动运行。每一步都「存在即跳过」，重复执行无副作用。
 #
-# 它只做配置落位与体检：不下载可执行文件，不写入任何密钥。
+# 它只做三件事：把机器专属配置落位（含数据分根）、迁移既有数据、体检外部工具与密钥。
+# 不下载可执行文件，不写入任何密钥。
 set -euo pipefail
 
 HOME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DATA_DIR="$HOME_DIR-data"
 OS_NAME="$(uname -s)"
 
 say()  { printf '%s\n' "$*"; }
@@ -16,8 +18,9 @@ ok()   { printf '   ok    %s\n' "$*"; }
 warn() { printf '   warn  %s\n' "$*"; }
 
 # ---------------------------------------------------------------------------
-step "1/6 解析 DSH home"
+step "1/7 解析 DSH home"
 say "   本仓库（= DSH home）: $HOME_DIR"
+say "   数据根（仓库之外）:  $DATA_DIR"
 if [ -n "${DSH_HOME:-}" ]; then
   resolved="$(cd "$DSH_HOME" 2>/dev/null && pwd || printf '%s' "$DSH_HOME")"
   if [ "$resolved" = "$HOME_DIR" ]; then
@@ -31,7 +34,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-step "2/6 持久化 DSH_HOME"
+step "2/7 持久化 DSH_HOME"
 if [ "$OS_NAME" = "Darwin" ] || [ "$OS_NAME" = "Linux" ]; then
   PROFILE_FILE="${ZDOTDIR:-$HOME}/.zprofile"
   WANT="export DSH_HOME=\"$HOME_DIR\""
@@ -55,7 +58,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-step "3/6 安装 git hook（pull 后自动执行本脚本）"
+step "3/7 安装 git hook（pull 后自动执行本脚本）"
 if [ -d "$HOME_DIR/.git" ]; then
   git -C "$HOME_DIR" config core.hooksPath hooks
   chmod +x "$HOME_DIR/hooks/post-merge" 2>/dev/null || true
@@ -66,7 +69,38 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-step "4/6 生成机器层 \$DSH_HOME/cordis.patch.yml"
+step "4/7 准备数据根（仓库之外的不可再生数据）"
+# 会话记录/附件/存储/凭据都放在这里，而不是 $DSH_HOME 内。
+# 于是仓库里的 `git clean -x` 之类的操作永远不可能删到它们。
+if [ -d "$DATA_DIR" ]; then
+  ok "$DATA_DIR 已存在"
+else
+  mkdir -p "$DATA_DIR"
+  ok "已创建 $DATA_DIR"
+fi
+# 一次性迁移：只在目标缺失时复制，绝不覆盖已有数据（幂等，可安全重复执行）
+for SUB in sessions attachments storages; do
+  if [ -e "$HOME_DIR/$SUB" ] && [ ! -e "$DATA_DIR/$SUB" ]; then
+    cp -R "$HOME_DIR/$SUB" "$DATA_DIR/$SUB"
+    ok "已迁移 $SUB → $DATA_DIR/$SUB"
+  fi
+done
+if [ -f "$DATA_DIR/.credentials.yaml" ]; then
+  chmod 600 "$DATA_DIR/.credentials.yaml" 2>/dev/null || true
+  ok "凭据已在数据根（权限已确保 600）"
+elif [ -f "$HOME_DIR/.credentials.yaml" ]; then
+  cp "$HOME_DIR/.credentials.yaml" "$DATA_DIR/.credentials.yaml"
+  chmod 600 "$DATA_DIR/.credentials.yaml" 2>/dev/null || true
+  ok "已迁移 .credentials.yaml（权限 600）"
+else
+  ok "尚无凭据文件（可用环境变量提供密钥）"
+fi
+if [ -e "$HOME_DIR/sessions" ] && [ -e "$DATA_DIR/sessions" ]; then
+  say "   提示：$HOME_DIR/sessions 仍在原处，仅作安全网；确认新布局正常后可自行删除"
+fi
+
+# ---------------------------------------------------------------------------
+step "5/7 生成机器层 \$DSH_HOME/cordis.patch.yml"
 case "$OS_NAME" in
   Darwin) MACHINE_OS="macos" ;;
   Linux)  MACHINE_OS="linux" ;;
@@ -74,18 +108,34 @@ case "$OS_NAME" in
 esac
 SRC="$HOME_DIR/machines/$MACHINE_OS.cordis.patch.yml"
 if [ -n "$MACHINE_OS" ] && [ -f "$SRC" ]; then
-  if [ -f "$HOME_DIR/cordis.patch.yml" ] && cmp -s "$SRC" "$HOME_DIR/cordis.patch.yml"; then
+  TMP_FILE="$(mktemp)"
+  DATA_ESC="${DATA_DIR//&/\\&}"
+  sed "s|__DSH_DATA__|$DATA_ESC|g" "$SRC" > "$TMP_FILE"
+  if [ -f "$HOME_DIR/cordis.patch.yml" ] && cmp -s "$TMP_FILE" "$HOME_DIR/cordis.patch.yml"; then
     ok "机器层已是最新（${MACHINE_OS}）"
+    rm -f "$TMP_FILE"
   else
-    cp "$SRC" "$HOME_DIR/cordis.patch.yml"
-    ok "已由 machines/$MACHINE_OS.cordis.patch.yml 生成"
+    mv "$TMP_FILE" "$HOME_DIR/cordis.patch.yml"
+    ok "已由 machines/${MACHINE_OS}.cordis.patch.yml 生成"
+  fi
+  # 自检：数据分根覆盖行是否齐全（行 id 一旦被 DSH 改名，这里会响铃）
+  MISSING=""
+  for ROW in session-persistence-jsonl attachment-local storage-json credentials spill-local; do
+    grep -qs "id: $ROW" "$HOME_DIR/cordis.patch.yml" || MISSING="$MISSING $ROW"
+  done
+  if grep -qs '__DSH_DATA__' "$HOME_DIR/cordis.patch.yml"; then
+    warn "机器层里仍有未替换的 __DSH_DATA__ 占位符，请检查 machines/${MACHINE_OS}.cordis.patch.yml"
+  elif [ -n "$MISSING" ]; then
+    warn "机器层缺少数据分根覆盖行：$MISSING —— 这些数据会退回 \$DSH_HOME 内"
+  else
+    ok "数据分根覆盖行齐全（5/5），数据根 = $DATA_DIR"
   fi
 else
   warn "缺少 machines/${MACHINE_OS:-<未识别平台>}.cordis.patch.yml，机器层未生成"
 fi
 
 # ---------------------------------------------------------------------------
-step "5/6 外部工具体检（只报告，不安装）"
+step "6/7 外部工具体检（只报告，不安装）"
 PLAYWRITER_ENTRY="$HOME/.local/lib/node_modules/playwriter/bin.js"
 if [ -f "$PLAYWRITER_ENTRY" ]; then
   ok "playwriter 入口存在：$PLAYWRITER_ENTRY"
@@ -106,21 +156,23 @@ if [ "$MACHINE_OS" = "macos" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-step "6/6 密钥体检（只报告，绝不写入）"
+step "7/7 密钥体检（只报告，绝不写入）"
 for KEY in TX_GATEWAY_API_KEY DEEPSEEK_API_KEY; do
   if [ -n "${!KEY:-}" ]; then
     ok "$KEY 已从环境变量提供"
+  elif [ -f "$DATA_DIR/.credentials.yaml" ] && grep -qs "$KEY" "$DATA_DIR/.credentials.yaml"; then
+    ok "$KEY 已在数据根 .credentials.yaml 中"
   elif [ -f "$HOME_DIR/.credentials.yaml" ] && grep -qs "$KEY" "$HOME_DIR/.credentials.yaml"; then
-    ok "$KEY 已在本机 .credentials.yaml 中"
+    ok "$KEY 在旧位置 .credentials.yaml 中（配置已指向数据根，注意迁移）"
   else
-    warn "$KEY 缺失：在 shell 里导出，或确认 \$DSH_HOME/.credentials.yaml 已同步"
+    warn "$KEY 缺失：在 shell 里导出，或确认 $DATA_DIR/.credentials.yaml 已同步"
   fi
 done
 
 # ---------------------------------------------------------------------------
 printf '\n完成。'
-if [ "$OS_NAME" = "Darwin" ] || [ "$OS_NAME" = "Linux" ]; then
-  printf '若这是首次安装，请重开终端让 DSH_HOME 生效。\n'
+if [ "$MACHINE_OS" = "macos" ] || [ "$MACHINE_OS" = "linux" ]; then
+  printf '数据分根与机器层改动需要重启 DSH 才会生效；首次安装还需重开终端让 DSH_HOME 生效。\n'
 else
   printf '\n'
 fi

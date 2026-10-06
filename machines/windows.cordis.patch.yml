@@ -1,12 +1,19 @@
 # dsh-config · 机器层（Windows）
 #
-# install.ps1 会把本文件复制成 $DSH_HOME/cordis.patch.yml。
-# 该层对本机所有 profile 生效，且覆盖共享层的同名行。
-# 绝对路径只允许出现在这里。
+# install.ps1 会把本文件做替换后写成 $DSH_HOME/cordis.patch.yml：
+#   __DSH_DATA__ → 本机数据根（默认 <本仓库目录>-data，即 %USERPROFILE%\.dsh-data），
+#   并统一转换成正斜杠（Node 在 Windows 上同样接受正斜杠）。
+# 该层对本机所有 profile 生效，且按行覆盖共享层。绝对路径只允许出现在这里。
 #
-# 目前为空：Windows 机器上还没有需要覆盖共享层的内容。
+# ── 数据分根（为什么）────────────────────────────────────────────────────
+# DSH 默认把所有用户数据放在 $DSH_HOME 下，而 $DSH_HOME 同时是本配置仓库的工作树。
+# 因此仓库里的 `git clean -x` 会连会话记录、凭据、附件一起删除。
+# 下面 5 行把「不可再生」的数据改写到仓库之外的数据根，
+# 使任何 git 命令都无法再触达它们；留在仓库里的只剩配置和可再生产物。
+#
+# 补丁是「整行替换」：这里必须重述该行所需的键（其余键用 schema 默认值）。
+#
 # 需要在 Windows 上启用 Playwriter 时，取消下面的注释并按实际安装路径修正。
-#
 # 注意两点（Windows 与 macOS 的差异）：
 #   1) Windows 上通常没有 HOME，只有 USERPROFILE，表达式要写成：
 #        !!js (process.env.HOME ?? process.env.USERPROFILE)
@@ -24,4 +31,28 @@
 #         cwd: !!js (process.env.HOME ?? process.env.USERPROFILE)
 #         toolCallTimeoutMs: 300000
 
-[]
+# ── 数据分根：把不可再生数据指向仓库之外的数据根 ─────────────────────────
+- id: session-persistence-jsonl
+  name: "@deepseek-ai/dsh-session-persistence-jsonl"
+  config:
+    root: __DSH_DATA__/sessions
+
+- id: attachment-local
+  name: "@deepseek-ai/dsh-attachment-local"
+  config:
+    dshHome: __DSH_DATA__
+
+- id: storage-json
+  name: "@deepseek-ai/dsh-storage-json"
+  config:
+    root: __DSH_DATA__/storages
+
+- id: credentials
+  name: "@deepseek-ai/dsh-credentials-local"
+  config:
+    path: __DSH_DATA__/.credentials.yaml
+
+- id: spill-local
+  name: "@deepseek-ai/dsh-spill-local"
+  config:
+    root: __DSH_DATA__/spill
