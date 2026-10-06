@@ -31,3 +31,10 @@ profiles/headless/
 
 # 机器层由 install.sh / install.ps1 从 machines/<os>.cordis.patch.yml 生成，
 # 不直接跟踪（每台机器的内容不同，跟踪它会互相覆盖）。上面 `*` 已经忽略它。
+
+# 插件安装会在 profile 里生成依赖树（node_modules、.plugin-manager 操作日志）。
+# 这些是可再生产的产物，但包内的 README.md / install.sh 会被上面那些「按文件名」
+# 的白名单规则穿透放行，使 node_modules 冒进 git status。这里显式再忽略一次
+# （gitignore 后面的规则优先，所以必须排在上面白名单之后）。
+profiles/*/node_modules/
+profiles/*/.plugin-manager/
