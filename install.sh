@@ -75,7 +75,7 @@ esac
 SRC="$HOME_DIR/machines/$MACHINE_OS.cordis.patch.yml"
 if [ -n "$MACHINE_OS" ] && [ -f "$SRC" ]; then
   if [ -f "$HOME_DIR/cordis.patch.yml" ] && cmp -s "$SRC" "$HOME_DIR/cordis.patch.yml"; then
-    ok "机器层已是最新（$MACHINE_OS）"
+    ok "机器层已是最新（${MACHINE_OS}）"
   else
     cp "$SRC" "$HOME_DIR/cordis.patch.yml"
     ok "已由 machines/$MACHINE_OS.cordis.patch.yml 生成"
