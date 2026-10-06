@@ -94,6 +94,8 @@ cd ~/.dsh && git pull
 | 机器层没更新 | `ls ~/.dsh/cordis.patch.yml` 存在且内容等于 `machines/<os>.cordis.patch.yml` |
 | Windows 上某个插件行报错 | Windows 通常没有 `HOME`，表达式要写成 `!!js (process.env.HOME ?? process.env.USERPROFILE)` |
 | 生效了但某些行被覆盖 | 检查机器层是否也定义了同一个 `id`（机器层优先级更高） |
+| `git status` 经常显示 patch 文件被改 | **正常现象**：应用会在启动或设置变化时把改动的行写回这个文件。想同步就 `git add -A && git commit && git push` |
+| `git pull` 报 `Your local changes would be overwritten` | 本机应用也写入了同一行，但还没提交。先丢弃本机这份未提交改动再拉取（远端版本已包含同样的配置）：<br>`git checkout -- profiles/desktop/cordis.patch.yml && git pull` |
 
 ## 切换 home 后如何生效（每台机器只做一次）
 
