@@ -1,0 +1,91 @@
+# dsh-config · 共享层（profile: desktop）
+#
+# 只放"所有机器完全一致"的配置。带绝对路径或 OS 专属的行，请写到
+# machines/<os>.cordis.patch.yml（由 install.sh 复制成 $DSH_HOME/cordis.patch.yml）。
+#
+# 生效顺序：bundle 层 → 本文件 → $DSH_HOME/cordis.patch.yml（机器层）→ --patch
+- id: ui-chat
+  name: "@deepseek-ai/dsh-client-ui-chat"
+  config:
+    transcriptView: standard
+    performanceUsage: detailed
+- id: ui-settings
+  name: "@deepseek-ai/dsh-client-ui-settings"
+  config:
+    enabled: true
+- id: ui-settings-account
+  name: "@deepseek-ai/dsh-client-ui-settings-account"
+  config:
+    version: 1
+    step: done
+    usage: detailed
+    developerTools: true
+    purpose: null
+    process: standard
+    completion: api-key
+- id: web-search-deepseek
+  name: "@deepseek-ai/dsh-web-search-deepseek"
+  config:
+    apiKeyEnv: DEEPSEEK_API_KEY
+    baseURL: https://api.tavily.com
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      tx-gateway:
+        displayName: tx-gateway
+        apiKeyEnv: TX_GATEWAY_API_KEY
+        api: openai-responses
+        baseURL: http://api-skynetyu.woa.com/v1
+        models:
+          - id: gpt-6.1-sol
+            name: gpt-6.1-sol
+            input:
+              - text
+              - image
+          - id: deepseek-v4-pro
+            name: deepseek-v4-pro
+          - id: deepseek-v4-flash
+            name: deepseek-v4-flash
+          - id: hy3
+            name: hy3
+          - id: hy4-preview
+            name: hy4-preview
+          - id: gpt-image-2
+            name: gpt-image-2
+            input:
+              - image
+          - id: gpt-image-2.5-sunburst
+            name: gpt-image-2.5-sunburst
+            input:
+              - image
+          - id: gpt-image-2.5-flare
+            name: gpt-image-2.5-flare
+            input:
+              - image
+      tx-gateway-completions:
+        displayName: tx-gateway-completions
+        apiKeyEnv: TX_GATEWAY_API_KEY
+        api: openai-completions
+        baseURL: http://api-skynetyu.woa.com/v1
+        models:
+          - id: glm-5.3
+            name: glm-5.3
+          - id: glm-5.3-flash
+            name: glm-5.3-flash
+            input:
+              - text
+              - image
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: tx-gateway
+    model: deepseek-v4-flash
+- id: session-log-deepseek
+  name: "@deepseek-ai/dsh-session-log-deepseek"
+  config:
+    enabled: false
+- id: ui-theme
+  name: "@deepseek-ai/dsh-client-ui-theme"
+  config:
+    preference: system

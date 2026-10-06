@@ -1,0 +1,20 @@
+# dsh-config · 机器层（macOS）
+#
+# install.sh 会把本文件复制成 $DSH_HOME/cordis.patch.yml。
+# 该层对本机所有 profile 生效，且覆盖共享层的同名行。
+# 绝对路径只允许出现在这里。
+#
+# Playwriter：通过 Chrome 扩展（chrome.debugger）驱动你已登录的真实 Chrome，
+# 绕开 Chrome 136+ 对默认数据目录禁用 --remote-debugging-port 的限制。
+# 扩展安装位置：~/.local/lib/node_modules/playwriter/dist/extension
+# 工具名：mcp__playwriter__execute / mcp__playwriter__reset
+- insert:
+    - id: playwriter-mcp
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: playwriter
+        transport: stdio
+        command: /usr/local/bin/node
+        args: [ "/Users/jiaxianwang/.local/lib/node_modules/playwriter/bin.js" ]
+        cwd: !!js process.env.HOME
+        toolCallTimeoutMs: 300000

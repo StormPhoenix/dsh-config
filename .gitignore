@@ -1,0 +1,20 @@
+# dsh-config 仓库的跟踪白名单
+#
+# 这个目录同时是 DSH 的 home（$DSH_HOME），里面混着大量本机运行时数据
+# （sessions / storages / attachments / .credentials.yaml / node_modules）。
+# 规则采用「全部忽略 + 显式放行」，只有下面列出的配置与脚本会进版本库。
+#
+# ⚠️ 永远不要在这个仓库里运行 `git clean -xdf`：会连忽略的文件一起删除，
+#    包括你的会话记录和凭据。README.md 有同样的警告。
+*
+!*/
+!.gitignore
+!README.md
+!install.sh
+!install.ps1
+!hooks/**
+!machines/**
+!profiles/*/cordis.patch.yml
+
+# 机器层由 install.sh / install.ps1 从 machines/<os>.cordis.patch.yml 生成，
+# 不直接跟踪（每台机器的内容不同，跟踪它会互相覆盖）。上面 `*` 已经忽略它。

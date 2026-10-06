@@ -1,0 +1,19 @@
+#!/bin/sh
+# dsh-config · git hook：`git pull` 合并完成后，把本机配置同步到位。
+# 启用方式（install 脚本会自动执行）：git config core.hooksPath hooks
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    powershell -NoProfile -ExecutionPolicy Bypass -File "$ROOT/install.ps1"
+    ;;
+  *)
+    if [ -x "$ROOT/install.sh" ]; then
+      "$ROOT/install.sh"
+    else
+      sh "$ROOT/install.sh"
+    fi
+    ;;
+esac

@@ -1,0 +1,27 @@
+# dsh-config · 机器层（Windows）
+#
+# install.ps1 会把本文件复制成 $DSH_HOME/cordis.patch.yml。
+# 该层对本机所有 profile 生效，且覆盖共享层的同名行。
+# 绝对路径只允许出现在这里。
+#
+# 目前为空：Windows 机器上还没有需要覆盖共享层的内容。
+# 需要在 Windows 上启用 Playwriter 时，取消下面的注释并按实际安装路径修正。
+#
+# 注意两点（Windows 与 macOS 的差异）：
+#   1) Windows 上通常没有 HOME，只有 USERPROFILE，表达式要写成：
+#        !!js (process.env.HOME ?? process.env.USERPROFILE)
+#   2) Desktop 自带的 Node 位于应用资源目录内；若用系统 Node，写它的绝对路径。
+#
+# - insert:
+#     - id: playwriter-mcp
+#       name: "@deepseek-ai/dsh-mcp-client"
+#       config:
+#         serverName: playwriter
+#         transport: stdio
+#         command: node
+#         args:
+#           - !!js (process.env.USERPROFILE ?? '') + '\\.local\\lib\\node_modules\\playwriter\\bin.js'
+#         cwd: !!js (process.env.HOME ?? process.env.USERPROFILE)
+#         toolCallTimeoutMs: 300000
+
+[]
