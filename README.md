@@ -115,6 +115,16 @@ cd ~/Workspace/deepseek-harness && pnpm run dev:desktop
 
 原因见 DSH 源码仓库的 `apps/desktop/README.md`：Desktop 会读取登录 shell 的环境，但**启动方自有的 `DSH_*` 变量不会被 shell 值覆盖**，因为它在读取之前就已经用 `DSH_HOME` 解析好了路径。
 
+## 新机器验证清单
+
+装完后依次确认：
+
+1. `echo $DSH_HOME` → 输出本仓库目录（不是 DSH 源码仓库里的 `.desktop-build`）
+2. `ls "$DSH_HOME/cordis.patch.yml"` → 文件存在（机器层已由脚本生成）
+3. `git -C "$DSH_HOME" config core.hooksPath` → 输出 `hooks`
+4. 启动 DSH 后，模型列表里能看到 `tx-gateway` 与 `tx-gateway-completions` 两套路由的模型
+5. macOS 上启用 Playwriter 时，工具列表里出现 `mcp__playwriter__execute`
+
 ## 已知限制
 
 - **通过界面安装的 bundle（插件包）不会跟着同步。** `profiles/desktop/package.json` 里的 `dsh.profile.bundles` 由 DSH 自己维护，容易被 `pnpm install` 改写，所以不在跟踪范围内。如果你以后用 `dsh plugin add` 装了外部插件包，需要在每台机器上分别装一次。纯配置（本仓库目前的全部内容）不受影响。
