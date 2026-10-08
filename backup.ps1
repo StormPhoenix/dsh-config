@@ -1,4 +1,4 @@
-# dsh-config 数据备份 (Windows) —— 与 backup.sh 行为一致。
+﻿# dsh-config 数据备份 (Windows) —— 与 backup.sh 行为一致。
 #
 # 备份内容：数据根（默认 <本仓库目录>-data，即 %USERPROFILE%\.dsh-data）——
 #           会话历史、附件、存储状态、明文凭据。

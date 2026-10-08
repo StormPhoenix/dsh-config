@@ -1,4 +1,4 @@
-# dsh-config installer (Windows) —— 幂等脚本，与 install.sh 行为一致。
+﻿# dsh-config installer (Windows) —— 幂等脚本，与 install.sh 行为一致。
 #
 # 首次安装与每次 `git pull` 之后执行同一个脚本，由 hooks/post-merge 自动调用。
 # 做四件事：把机器专属配置落位（含数据分根）、迁移既有数据、确保记忆插件就位、
