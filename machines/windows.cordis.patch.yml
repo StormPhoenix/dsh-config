@@ -8,7 +8,7 @@
 # ── 数据分根（为什么）────────────────────────────────────────────────────
 # DSH 默认把所有用户数据放在 $DSH_HOME 下，而 $DSH_HOME 同时是本配置仓库的工作树。
 # 因此仓库里的 `git clean -x` 会连会话记录、凭据、附件一起删除。
-# 下面 6 行把「不可再生」的数据改写到仓库之外的数据根，
+# 下面 5 行把「不可再生」的数据改写到仓库之外的数据根，
 # 使任何 git 命令都无法再触达它们；留在仓库里的只剩配置和可再生产物。
 #
 # 补丁是「整行替换」：这里必须重述该行所需的键（其余键用 schema 默认值）。
@@ -56,18 +56,3 @@
   name: "@deepseek-ai/dsh-spill-local"
   config:
     root: __DSH_DATA__/spill
-
-# ── 记忆插件 dsh-memory：把长期记忆库也移出仓库工作树 ────────────────────
-# 插件未安装时，DSH 会静默忽略这个悬空行（实测），所以可以常驻机器层。
-# 安装动作在 install.ps1 第 6 步；豁免是「包版本 × DSH 版本」双精确的。
-# 这里用绝对路径（由 __DSH_DATA__ 替换而来），因此不依赖 %HOME%（Windows 上通常没有）。
-- id: memory
-  name: dsh-memory
-  config:
-    path: __DSH_DATA__/memory/memory.db
-    promptRecentCount: 10
-    promptMaxChars: 2000
-    maxTextChars: 2000
-    searchLimitDefault: 10
-    searchLimitMax: 50
-    promptOrder: 50

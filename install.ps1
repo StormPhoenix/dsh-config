@@ -1,15 +1,8 @@
 ﻿# dsh-config installer (Windows) —— 幂等脚本，与 install.sh 行为一致。
 #
 # 首次安装与每次 `git pull` 之后执行同一个脚本，由 hooks/post-merge 自动调用。
-# 做四件事：把机器专属配置落位（含数据分根）、迁移既有数据、确保记忆插件就位、
-# 体检外部工具与密钥。除第 6 步用 pnpm 取一个 npm 包外不下载可执行文件；全程不写入密钥。
-[CmdletBinding()]
-param(
-  # deepseek-harness 源码仓库路径（需含 apps\cli\src\bin.ts）。
-  # 提供后会写入本仓库下 gitignored 的 .source-dir 记录文件，
-  # 之后 hooks/post-merge 的无参重跑会自动复用，无需每次指定。
-  [string]$SourceDir
-)
+# 做三件事：把机器专属配置落位（含数据分根）、迁移既有数据、体检外部工具与密钥。
+# 不下载可执行文件；全程不写入密钥。
 $ErrorActionPreference = 'Stop'
 
 $HomeDir = $PSScriptRoot
@@ -21,7 +14,7 @@ function Ok   ($m) { Write-Host "   ok    $m" }
 function Warn ($m) { Write-Host "   warn  $m" -ForegroundColor Yellow }
 
 # ---------------------------------------------------------------------------
-Step "1/8 解析 DSH home"
+Step "1/7 解析 DSH home"
 Say "   本仓库（= DSH home）: $HomeDir"
 Say "   数据根（仓库之外）:  $DataDir"
 if ($env:DSH_HOME) {
@@ -35,7 +28,7 @@ if ($env:DSH_HOME) {
 }
 
 # ---------------------------------------------------------------------------
-Step "2/8 持久化 DSH_HOME（用户级环境变量）"
+Step "2/7 持久化 DSH_HOME（用户级环境变量）"
 $persisted = [Environment]::GetEnvironmentVariable('DSH_HOME', 'User')
 if ($persisted -and $persisted.TrimEnd('\') -ieq $HomeDir.TrimEnd('\')) {
   Ok "用户环境变量 DSH_HOME 已正确设置"
@@ -49,7 +42,7 @@ if ($persisted -and $persisted.TrimEnd('\') -ieq $HomeDir.TrimEnd('\')) {
 }
 
 # ---------------------------------------------------------------------------
-Step "3/8 安装 git hook（pull 后自动执行本脚本）"
+Step "3/7 安装 git hook（pull 后自动执行本脚本）"
 if (Test-Path (Join-Path $HomeDir '.git')) {
   git -C $HomeDir config core.hooksPath hooks
   Ok "core.hooksPath = hooks"
@@ -58,8 +51,8 @@ if (Test-Path (Join-Path $HomeDir '.git')) {
 }
 
 # ---------------------------------------------------------------------------
-Step "4/8 准备数据根（仓库之外的不可再生数据）"
-# 会话记录/附件/存储/凭据/长期记忆都放在这里，而不是 $DSH_HOME 内。
+Step "4/7 准备数据根（仓库之外的不可再生数据）"
+# 会话记录/附件/存储/凭据都放在这里，而不是 $DSH_HOME 内。
 # 于是仓库里的 `git clean -x` 之类的操作永远不可能删到它们。
 if (Test-Path $DataDir) {
   Ok "$DataDir 已存在"
@@ -91,7 +84,7 @@ if ((Test-Path (Join-Path $HomeDir 'sessions')) -and (Test-Path (Join-Path $Data
 }
 
 # ---------------------------------------------------------------------------
-Step "5/8 生成机器层 `$DSH_HOME/cordis.patch.yml"
+Step "5/7 生成机器层 `$DSH_HOME/cordis.patch.yml"
 $src = Join-Path $HomeDir 'machines\windows.cordis.patch.yml'
 $dst = Join-Path $HomeDir 'cordis.patch.yml'
 if (Test-Path $src) {
@@ -115,7 +108,7 @@ if (Test-Path $src) {
   }
   # 自检：数据分根覆盖行是否齐全（行 id 一旦被 DSH 改名，这里会响铃）
   $missing = @()
-  foreach ($row in @('session-persistence-jsonl', 'attachment-local', 'storage-json', 'credentials', 'spill-local', 'memory')) {
+  foreach ($row in @('session-persistence-jsonl', 'attachment-local', 'storage-json', 'credentials', 'spill-local')) {
     if (-not (Select-String -Path $dst -Pattern "id: $row" -Quiet)) { $missing += $row }
   }
   if (Select-String -Path $dst -Pattern '__DSH_DATA__' -Quiet) {
@@ -123,148 +116,14 @@ if (Test-Path $src) {
   } elseif ($missing.Count -gt 0) {
     Warn "机器层缺少数据分根覆盖行：$($missing -join ', ') —— 这些数据会退回 `$DSH_HOME 内"
   } else {
-    Ok "数据分根覆盖行齐全（6/6），数据根 = $DataDir"
+    Ok "数据分根覆盖行齐全（5/5），数据根 = $DataDir"
   }
 } else {
   Warn "缺少 machines\windows.cordis.patch.yml，机器层未生成"
 }
 
 # ---------------------------------------------------------------------------
-Step "6/8 记忆插件 dsh-memory@0.1.0（精确版本豁免 + 安装）"
-# 为什么需要豁免：该插件声明的 peer 是 ^0.1.0-rc.6（只覆盖 0.1.x），与本机 0.2.x 不匹配，
-# 兼容性闸门会拒绝安装。豁免是「包版本 × DSH 版本」双精确的：升级插件或升级 DSH 之后
-# 都要重新授予 —— 否则启动时该 bundle 被跳过（记忆功能静默停用，应用本身照常启动）。
-# 为什么固定 0.1.0：该包只发布过这一个版本，且已实测在 0.2.1-alpha.1 上写入/召回正常。
-# 存储路径由机器层的 memory 行改写到数据根；插件未安装时那一行被静默忽略。
-$memPkg = 'dsh-memory@0.1.0'
-$memId = 'dsh-memory'
-$dshMode = ''
-$dshBin = ''
-$dshSrc = ''
-if ($env:DSH_CLI) {
-  $dshMode = 'bin'
-  $dshBin = $env:DSH_CLI
-} elseif (Get-Command dsh -ErrorAction SilentlyContinue) {
-  $dshMode = 'bin'
-  $dshBin = (Get-Command dsh).Source
-} else {
-  # 源码目录解析顺序：-SourceDir 参数 → .source-dir 记录 → DSH_SOURCE_DIR → 常见位置。
-  # 记录文件让一次性的参数（或启发式命中）在 hooks/post-merge 无参重跑时也能复用。
-  $sourceRecord = Join-Path $HomeDir '.source-dir'
-  $recorded = ''
-  if (Test-Path $sourceRecord) { $recorded = (Get-Content $sourceRecord -Raw -Encoding UTF8).Trim() }
-  if ($SourceDir -and -not (Test-Path (Join-Path $SourceDir 'apps\cli\src\bin.ts'))) {
-    Warn "-SourceDir 指定的路径缺少 apps\cli\src\bin.ts，不像 deepseek-harness 仓库: $SourceDir"
-  }
-  $cands = @($SourceDir, $recorded, $env:DSH_SOURCE_DIR, (Join-Path $env:USERPROFILE 'Workspace\deepseek-harness'), (Join-Path $env:USERPROFILE 'deepseek-harness'))
-  foreach ($c in $cands) {
-    if ($c -and (Test-Path (Join-Path $c 'apps\cli\src\bin.ts'))) {
-      $dshMode = 'source'
-      $dshSrc = (Resolve-Path $c).Path
-      if ($dshSrc -ne $recorded) {
-        [System.IO.File]::WriteAllText($sourceRecord, $dshSrc + "`n", (New-Object System.Text.UTF8Encoding($false)))
-        Say "   已记录 DSH 源码目录 → $sourceRecord"
-      }
-      break
-    }
-  }
-}
-function Invoke-Dsh {
-  param([Parameter(ValueFromRemainingArguments = $true)] $Rest)
-  if ($dshMode -eq 'source') { & pnpm -C $dshSrc dsh @Rest } else { & $dshBin @Rest }
-}
-# Node 版本护栏：源码模式经 pnpm 跑 dsh，Node < 22.13 时 pnpm 自身就会崩
-# （node:sqlite 等内置模块缺失），脚本只能笼统报「读不到 dsh 版本」。这里提前说清原因。
-$skipReason = ''
-if ($dshMode -eq 'source') {
-  $nodeVer = ''
-  if (Get-Command node -ErrorAction SilentlyContinue) { $nodeVer = (& node -v 2>$null | Select-Object -First 1) }
-  $nodeOk = $false
-  if ("$nodeVer" -match '^v(\d+)\.(\d+)') {
-    $nodeOk = ([int]$Matches[1] -gt 22) -or (([int]$Matches[1] -eq 22) -and ([int]$Matches[2] -ge 13))
-  }
-  if (-not $nodeOk) {
-    $skipReason = "node ${nodeVer} 低于 22.13，源码模式的 pnpm dsh 无法运行（如 nvm use 22.19.0 后重跑），跳过 $memPkg"
-  }
-}
-if ($skipReason) {
-  Warn $skipReason
-} elseif (-not $dshMode) {
-  Warn "找不到 dsh 命令（打包版 Desktop 不把 CLI 放进 PATH），跳过 $memPkg"
-  Say "   手动安装（每台机器、每个 profile 各一次）："
-  Say "     dsh plugin --profile desktop allow-version $memPkg --dsh-version <dsh -V> --accept-risk"
-  Say "     dsh plugin --profile desktop add $memPkg"
-  Say "   或用 -SourceDir 指定 deepseek-harness 源码仓库路径后重跑本脚本："
-  Say "     .\install.ps1 -SourceDir G:\Workspace\deepseek-harness"
-  Say "   （也可设置 DSH_CLI / DSH_SOURCE_DIR 环境变量；命中一次后会记录到 .source-dir，之后 pull 触发的重跑自动复用）"
-} else {
-  # 原生命令写到 stderr 的内容在 $ErrorActionPreference='Stop' 下可能被当成终止错误，这里放宽
-  $prevEap = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
-  # 子进程显式带上 DSH_HOME=本仓库：避免未设置或设错时把插件装到别的 home
-  $prevHome = $env:DSH_HOME
-  $env:DSH_HOME = $HomeDir
-  # 注意用数组展开而不是直接写 -V：声明了 ValueFromRemainingArguments 的函数是高级函数，
-  # 拥有 -Verbose 等公共参数，而 -V 恰是 -Verbose 的唯一前缀缩写，会被参数绑定器截走，
-  # 导致 dsh 裸跑并报「--profile <name> is required」。数组展开不经过参数名解析，可避免。
-  $dshVer = (Invoke-Dsh @('-V') 2>$null | Select-Object -Last 1)
-  if ($dshVer) { $dshVer = $dshVer.Trim() }
-  if (-not $dshVer -or $dshVer -notmatch '^[0-9]+\.[0-9]') {
-    Warn "读不到 dsh 版本（模式：${dshMode}），跳过 $memPkg"
-  } else {
-    $touched = 0
-    $initialized = 0
-    foreach ($pdir in (Get-ChildItem (Join-Path $HomeDir 'profiles') -Directory -ErrorAction SilentlyContinue)) {
-      if (-not (Test-Path (Join-Path $pdir.FullName 'package.json'))) { continue }
-      $initialized++
-      $name = $pdir.Name
-      $log = [System.IO.Path]::GetTempFileName()
-      Invoke-Dsh plugin --profile $name allow-version $memPkg --dsh-version $dshVer --accept-risk *> $log
-      if ($LASTEXITCODE -ne 0) {
-        if (Select-String -Path $log -Pattern 'managed exclusively by the Electron application' -Quiet) {
-          # 设计使然：desktop profile 只归 Electron 应用自己管，CLI 一律拒（apps/cli/src/args.ts）
-          Warn "${name}: 由 Desktop 应用独占管理，CLI 无法代劳（设计使然，不是失败）"
-          Say "   请在 Desktop 应用内让 agent 用 plugin_manager 工具执行（该工具只在应用内 + 默认智能体组合中存在）："
-          Say "     action=set_version_exemption target=$memPkg runtimeVersion=$dshVer enabled=true acceptRisk=true"
-          Say "     action=install_bundle        target=$memPkg"
-          Say "   若没有该工具，见 README「长期记忆」一节的手动步骤"
-        } else {
-          Warn "${name}: 授予 $memPkg 豁免失败（dsh = ${dshVer}），错误末 3 行："
-          Get-Content $log -Tail 3 | ForEach-Object { Say "     $_" }
-        }
-        Remove-Item $log -Force
-        continue
-      }
-      if (Test-Path (Join-Path $pdir.FullName "node_modules\$memId")) {
-        Ok "${name}: $memId 已安装（豁免已确认 = ${dshVer}）"
-        Remove-Item $log -Force
-      } else {
-        Invoke-Dsh plugin --profile $name add $memPkg *> $log
-        if ($LASTEXITCODE -eq 0) {
-          Ok "${name}: 已安装 ${memPkg}（重启 DSH 后生效）"
-        } else {
-          Warn "${name}: 安装 $memPkg 失败，错误末 3 行："
-          Get-Content $log -Tail 3 | ForEach-Object { Say "     $_" }
-          Say "   手动执行：dsh plugin --profile $name add $memPkg"
-        }
-        Remove-Item $log -Force
-      }
-      $touched++
-    }
-    if ($touched -eq 0 -and $initialized -eq 0) {
-      Warn "profile 还没初始化（profiles\*\package.json 不存在），本次跳过 $memPkg"
-      Say "   新机器首次运行时这是正常的：profile 由 DSH 自己创建，仓库只跟踪 profiles\*\cordis.patch.yml。"
-      Say "   启动一次 DSH（Desktop 应用，或 dsh --profile <名字>）后再跑一次本脚本，就会自动装上；"
-      Say "   之后每次 git pull 也会由 hooks/post-merge 自动重跑。"
-      Say "   注意：desktop profile 即使已初始化，CLI 也无权管理，仍需应用内安装或手动步骤（见 README）。"
-    }
-  }
-  $env:DSH_HOME = $prevHome
-  $ErrorActionPreference = $prevEap
-}
-
-# ---------------------------------------------------------------------------
-Step "7/8 外部工具体检（只报告，不安装）"
+Step "6/7 外部工具体检（只报告，不安装）"
 if (Get-Command node -ErrorAction SilentlyContinue) {
   Ok "node: $((Get-Command node).Source)"
 } else {
@@ -278,7 +137,7 @@ if (Test-Path $pw) {
 }
 
 # ---------------------------------------------------------------------------
-Step "8/8 密钥体检（只报告，绝不写入）"
+Step "7/7 密钥体检（只报告，绝不写入）"
 foreach ($key in @('TX_GATEWAY_API_KEY', 'DEEPSEEK_API_KEY')) {
   $envValue = [Environment]::GetEnvironmentVariable($key, 'User')
   if ($envValue) {
@@ -292,5 +151,5 @@ foreach ($key in @('TX_GATEWAY_API_KEY', 'DEEPSEEK_API_KEY')) {
   }
 }
 
-Write-Host "`n完成。数据分根、机器层与插件改动需要重启 Desktop 才会生效；首次安装还需重开终端让 DSH_HOME 生效。"
+Write-Host "`n完成。数据分根与机器层改动需要重启 Desktop 才会生效；首次安装还需重开终端让 DSH_HOME 生效。"
 Write-Host "备份数据（建议定期执行）：.\backup.ps1   数据根：$DataDir"
