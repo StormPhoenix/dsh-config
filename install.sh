@@ -8,6 +8,13 @@
 # 不下载可执行文件；全程不写入密钥。
 set -euo pipefail
 
+# Explicit repository restore runs configuration setup, then supported plugin preparation.
+if [ "${1:-}" = "--with-plugins" ]; then
+  shift
+  bash "${BASH_SOURCE[0]}"
+  exec "${DSH_TRANSFER_PYTHON:-python3}" "$(dirname "${BASH_SOURCE[0]}")/plugin-repo.py" restore "$@"
+fi
+
 # Explicit restore does not run environment setup or rewrite profile files.
 if [ "${1:-}" = "--plugins" ]; then
   shift

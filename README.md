@@ -194,6 +194,24 @@ cd ~/Workspace/deepseek-harness && pnpm run dev:desktop
 - **数据根不会自动跟随 home 移动。** 数据根 = `<本仓库目录>-data`；如果以后把仓库 clone 到别处，旧数据需要手动 `cp -R` 过去（应用退出后操作）。
 - **新增的 home 数据存储不会自动分根。** DSH 若新增写在 home 里的存储，需要按「数据分根」一节的模式补一行覆盖；脚本自检只覆盖已知的 6 个行 id。
 
+## 插件私有子模块
+
+`plugins/` 是独立 `dsh-plugin-archive` 仓库的 submodule。配置、用户技能和安装脚本仍由本仓库管理；插件包与宠物本地修改源码由子模块管理。插件安装包和素材使用 Git LFS，不提交依赖目录、凭据、会话或插件个人数据。
+
+新机器先安装 Git LFS、Python 3.9+ 和受支持的 Harness。两仓库发布后，使用 `git clone --recurse-submodules` 克隆本仓库，再执行 `git -C "$HOME/.dsh/plugins" lfs pull`。子模块 URL 为同账户相对路径 `../dsh-plugin-archive.git`；目前只有本地仓库，本机 Git 配置使用本地来源覆盖，未创建或上传 GitHub 仓库。
+
+```sh
+# 先验证所有插件，再配置环境并准备 Desktop 插件安装清单
+python3 ~/.dsh/plugin-repo.py verify
+bash ~/.dsh/install.sh --with-plugins --profile desktop
+# 打包安装版 Desktop：注册该应用提供的 CLI，初始化 profile，退出应用后自动安装
+bash ~/.dsh/install.sh --with-plugins --profile desktop --cli dsh --app-closed
+```
+
+Windows 对应执行 `python plugin-repo.py verify` 和 `./install.ps1 --with-plugins --profile desktop`，自动安装时同样附加 `--cli dsh --app-closed`。不指定 profile 时准备全部归档 profile。未指定 CLI 时仅准备清单，不安装；开发态 Desktop 必须通过应用内插件管理器执行清单。普通 npm 或源码 CLI 不能管理 Desktop。配置脚本会进行原有环境设置；插件恢复不覆盖 profile 文件、不自动豁免版本、不执行包安装脚本。
+
+`python3 plugin-repo.py export --repository /path/to/new-staging-directory` 可从已安装插件生成新快照；已有归档不直接覆盖。审查后先提交插件仓库，再提交本仓库的 submodule 指针。发布时先推送插件仓库及 LFS 对象，再推送配置仓库。归档不是完整离线依赖镜像；恢复后仍需核对版本、启用状态与实际功能。详细包清单见子模块的 `manifest.json`。
+
 ## 插件打包与跨机器恢复
 
 需要 Python 3.9+（Windows 默认 `python`，macOS/Linux 默认 `python3`，可用 `DSH_TRANSFER_PYTHON` 指定解释器）。插件归档与原有数据归档相互独立，不会更改正在运行的 profile。

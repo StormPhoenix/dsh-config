@@ -21,6 +21,10 @@
 !backup.ps1
 !/plugin-transfer.py
 !/plugin-transfer.test.py
+!/plugin-repo.py
+!/plugin-repo.test.py
+!/.gitmodules
+!/plugins
 # 用户技能随配置仓库同步，不包括技能内缓存或依赖。
 !/skills/**
 skills/**/node_modules/
