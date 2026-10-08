@@ -84,7 +84,7 @@ if ((Test-Path (Join-Path $HomeDir 'sessions')) -and (Test-Path (Join-Path $Data
 }
 
 # ---------------------------------------------------------------------------
-Step "5/8 生成机器层 `$DSH_HOME/cordis.patch.yml`"
+Step "5/8 生成机器层 `$DSH_HOME/cordis.patch.yml"
 $src = Join-Path $HomeDir 'machines\windows.cordis.patch.yml'
 $dst = Join-Path $HomeDir 'cordis.patch.yml'
 if (Test-Path $src) {
@@ -92,7 +92,8 @@ if (Test-Path $src) {
   $dataYaml = $DataDir.Replace('\', '/')
   # -replace 的替换串里 $ 有特殊含义，需转义为 $$；其余字符原样
   $replacement = $dataYaml.Replace('$', '$$')
-  $content = (Get-Content $src -Raw) -replace '__DSH_DATA__', $replacement
+  # -Encoding UTF8：PS 5.1 默认按 ANSI 读无 BOM 文件，会把 UTF-8 中文注释读成乱码
+  $content = (Get-Content $src -Raw -Encoding UTF8) -replace '__DSH_DATA__', $replacement
   $content = ($content -replace "`r`n", "`n")
   $changed = -not (Test-Path $dst)
   if (-not $changed) {
