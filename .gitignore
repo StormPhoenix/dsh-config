@@ -19,6 +19,8 @@
 !install.ps1
 !backup.sh
 !backup.ps1
+!/plugin-transfer.py
+!/plugin-transfer.test.py
 !hooks/**
 !machines/**
 !profiles/*/cordis.patch.yml
@@ -38,3 +40,5 @@ profiles/headless/
 # （gitignore 后面的规则优先，所以必须排在上面白名单之后）。
 profiles/*/node_modules/
 profiles/*/.plugin-manager/
+# Runtime package READMEs must not pass the filename allowlist above.
+dsh-runtimes/

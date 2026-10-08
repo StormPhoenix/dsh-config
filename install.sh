@@ -8,6 +8,12 @@
 # 不下载可执行文件；全程不写入密钥。
 set -euo pipefail
 
+# Explicit restore does not run environment setup or rewrite profile files.
+if [ "${1:-}" = "--plugins" ]; then
+  shift
+  exec "${DSH_TRANSFER_PYTHON:-python3}" "$(dirname "${BASH_SOURCE[0]}")/plugin-transfer.py" restore "$@"
+fi
+
 HOME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_DIR="$HOME_DIR-data"
 OS_NAME="$(uname -s)"

@@ -20,6 +20,12 @@
 # 事件可能不完整；需要完全一致时先退出 DSH 再备份。
 set -euo pipefail
 
+# Plugin archives are separate from data archives containing credentials.
+if [ "${1:-}" = "--plugins" ]; then
+  shift
+  exec "${DSH_TRANSFER_PYTHON:-python3}" "$(dirname "${BASH_SOURCE[0]}")/plugin-transfer.py" backup "$@"
+fi
+
 HOME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_DIR="$HOME_DIR-data"
 OUT_DIR="${DSH_BACKUP_DIR:-$HOME/dsh-backups}"

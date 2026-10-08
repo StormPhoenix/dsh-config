@@ -180,10 +180,57 @@ cd ~/Workspace/deepseek-harness && pnpm run dev:desktop
 
 ## 已知限制
 
-- **UI 里安装的其他 bundle（插件包）不会跟着同步。** `profiles/desktop/package.json` 里的 `dsh.profile.bundles` 由 DSH 自己维护，容易被 `pnpm install` 改写，所以不在跟踪范围内。如果你用界面或 `dsh plugin add` 装了插件包，需要在每台机器上分别装一次。
+- **插件不会仅凭 Git 同步自动安装。** profile 的依赖清单与依赖目录不参与 Git 同步；使用下方「插件打包与跨机器恢复」生成插件归档，再通过目标机器的官方插件管理入口安装。
 - **`dsh-runtimes/`（离线运行时，约 370MB）不迁移**，新 home 首次需要时会自行安装。它现在也是 `git clean -x` 唯一会波及的东西（可重建，只是慢）。
 - **数据根不会自动跟随 home 移动。** 数据根 = `<本仓库目录>-data`；如果以后把仓库 clone 到别处，旧数据需要手动 `cp -R` 过去（应用退出后操作）。
 - **新增的 home 数据存储不会自动分根。** DSH 若新增写在 home 里的存储，需要按「数据分根」一节的模式补一行覆盖；脚本自检只覆盖已知的 6 个行 id。
+
+## 插件打包与跨机器恢复
+
+需要 Python 3.9+（Windows 默认 `python`，macOS/Linux 默认 `python3`，可用 `DSH_TRANSFER_PYTHON` 指定解释器）。插件归档与原有数据归档相互独立，不会更改正在运行的 profile。
+
+源机器打包已经安装的外部 bundle，固定实际安装版本，不执行包的构建或发布脚本：
+
+```powershell
+# Windows：只打包 Desktop；省略 --profile 则扫描所有已初始化 profile
+.\backup.ps1 --plugins --profile desktop --out D:\dsh-backups
+```
+
+```sh
+# macOS / Linux
+bash ./backup.sh --plugins --profile desktop --out "$HOME/dsh-backups"
+```
+
+生成 `dsh-plugins-<时间戳>.zip`，内含插件清单、启用顺序、SHA-256 校验值及每个插件的 `.tgz`。不含 `node_modules`、宿主包、版本豁免、配置、会话、凭据或插件自己的数据；插件包内部的可执行文件仍是受信任代码，归档只应来自可信机器。已安装包中的符号链接会使备份失败，而不是生成可能跨机器失效的归档。
+
+目标机器先安装 Harness、初始化所需 profile，然后复制归档并解压校验：
+
+```powershell
+.\install.ps1 --plugins D:\dsh-backups\dsh-plugins-<时间戳>.zip --profile desktop
+```
+
+```sh
+bash ./install.sh --plugins /path/to/dsh-plugins-<时间戳>.zip --profile desktop
+```
+
+不带 `--cli` 时只解压到仓库旁的 `dsh-plugin-restore-<时间戳>/`，不安装、不改 profile，并列出安装顺序，生成 `INSTALL-IN-APP.txt`；可将这份清单交给目标 Desktop 内的智能体，通过 `plugin_manager` 安装。**开发态 Desktop（包括 `pnpm run start:desktop`）请用应用的插件管理页面或应用内 `plugin_manager`，按清单顺序安装解压出的 `.tgz` 文件；原先禁用的插件安装后仍应禁用。** 不要直接覆盖 profile 的依赖清单或 `node_modules`。保留解压目录，因为安装后的本地归档来源可能在重装时使用。
+
+打包安装版 Desktop 可先通过「Manage dsh Command」注册其 CLI，初始化 Desktop profile 后完全退出应用，再运行自动安装；普通 npm 或源码 CLI 无权管理 Desktop profile：
+
+```powershell
+.\install.ps1 --plugins D:\backup.zip --profile desktop --cli dsh --app-closed
+```
+
+```sh
+# Web 等普通 profile 使用普通 dsh CLI；先退出目标 Harness
+bash ./install.sh --plugins /path/to/backup.zip --profile web --cli /path/to/dsh --app-closed
+```
+
+自动安装走官方 `dsh plugin`，保留目标机器已有插件，默认阻止构建脚本；兼容性失败时停止，不自动豁免。归档包含禁用 bundle 时拒绝自动安装，改用应用插件管理入口保留启停状态。安装不是跨插件事务：中途失败时前面已成功安装的插件会保留，需检查后再继续。目标机器已有的 bundle 顺序不被覆盖。
+
+**这不是完全离线依赖镜像。** 插件自身文件可离线带走，但传递依赖由目标包管理器解析，可能需要网络；原生文件所在包要求源/目标 OS 与架构相同，跨平台应在目标平台重新获取兼容包。插件自己下载的运行时（例如 dsh-pet 的 Electron）、用户动画、宠物配置与对话记忆也不包含；数据归档只覆盖 `<仓库>-data`，插件写入 `$DSH_HOME` 的数据需另外备份。安装后启动 Harness，在插件页核对版本、启停状态与实际功能。
+
+测试不访问真实 profile、不执行安装：`python plugin-transfer.test.py`（macOS/Linux 使用 `python3`）。
 
 ## 备份
 

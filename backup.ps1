@@ -15,6 +15,15 @@
 # 恢复：先退出 DSH，再解开归档覆盖数据根（见脚本末尾打印的命令）。
 $ErrorActionPreference = 'Stop'
 
+# Plugin-only backup is separate from archives containing credentials.
+if ($args.Count -gt 0 -and $args[0] -eq '--plugins') {
+  $rest = @($args | Select-Object -Skip 1)
+  $python = if ($env:DSH_TRANSFER_PYTHON) { $env:DSH_TRANSFER_PYTHON } else { 'python' }
+  & $python (Join-Path $PSScriptRoot 'plugin-transfer.py') backup @rest
+  if ($LASTEXITCODE -ne 0) { throw "插件备份失败（退出码 $LASTEXITCODE）" }
+  exit 0
+}
+
 $HomeDir = $PSScriptRoot
 $DataDir = "$HomeDir-data"
 $OutDir = if ($env:DSH_BACKUP_DIR) { $env:DSH_BACKUP_DIR } else { Join-Path $env:USERPROFILE 'dsh-backups' }

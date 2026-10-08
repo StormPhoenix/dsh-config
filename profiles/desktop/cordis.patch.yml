@@ -79,7 +79,7 @@
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
     provider: tx-gateway
-    model: deepseek-v4-flash
+    model: gpt-6.1-sol
 - id: session-log-deepseek
   name: "@deepseek-ai/dsh-session-log-deepseek"
   config:

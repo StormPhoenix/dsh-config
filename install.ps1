@@ -5,6 +5,15 @@
 # 不下载可执行文件；全程不写入密钥。
 $ErrorActionPreference = 'Stop'
 
+# Explicit restore mode does not run environment setup or rewrite profile files.
+if ($args.Count -gt 0 -and $args[0] -eq '--plugins') {
+  $rest = @($args | Select-Object -Skip 1)
+  $python = if ($env:DSH_TRANSFER_PYTHON) { $env:DSH_TRANSFER_PYTHON } else { 'python' }
+  & $python (Join-Path $PSScriptRoot 'plugin-transfer.py') restore @rest
+  if ($LASTEXITCODE -ne 0) { throw "插件恢复失败（退出码 $LASTEXITCODE）" }
+  exit 0
+}
+
 $HomeDir = $PSScriptRoot
 $DataDir = "$HomeDir-data"
 
