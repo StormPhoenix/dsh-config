@@ -95,7 +95,7 @@ dsh plugin --profile desktop add dsh-memory@0.1.0
 
 > **注意**：该插件**没有写入门禁**（不像 Claude Code 的记忆文件有格式/凭据校验），是否写入完全依赖模型的判断与工具描述。别让它经手密钥；记忆会随每轮请求注入，属于持久的提示注入面，建议定期人工过一眼（`memory_search` 或直接看数据根里的库）。
 
-`install.sh` 需要能调用 `dsh`。打包版 Desktop 不把 CLI 放进 `PATH`，此时脚本按下面顺序找一个：`DSH_CLI`（dsh 可执行文件路径）→ `PATH` 里的 `dsh` → `DSH_SOURCE_DIR`（DSH 源码目录）→ `~/Workspace/deepseek-harness` 等常见位置（以 `apps/cli/src/bin.ts` 存在为准）。都找不到时只 `warn` 并打印手动命令，不会静默跳过。
+`install.sh` 需要能调用 `dsh`。打包版 Desktop 不把 CLI 放进 `PATH`，此时脚本按下面顺序找一个：`DSH_CLI`（dsh 可执行文件路径）→ `PATH` 里的 `dsh` → `--source-dir` 参数／`.source-dir` 记录／`DSH_SOURCE_DIR` 环境变量（DSH 源码目录）→ `~/Workspace/deepseek-harness` 等常见位置（以 `apps/cli/src/bin.ts` 存在为准）。源码仓库不在默认位置时，用参数显式给一次即可：`./install.sh --source-dir <路径>`（Windows 为 `.\install.ps1 -SourceDir <路径>`）；任何方式命中后路径会记到仓库内 gitignored 的 `.source-dir`，之后 `git pull` 触发的无参重跑自动复用。源码模式还要求 Node ≥ 22.13（pnpm 11 自身的门槛），过低时脚本会明确提示而不是笼统报「读不到 dsh 版本」。都找不到时只 `warn` 并打印手动命令，不会静默跳过。
 
 ### profile 分两类：CLI 能管的 / 只有应用能管的
 

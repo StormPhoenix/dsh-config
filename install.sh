@@ -8,6 +8,28 @@
 # 体检外部工具与密钥。除第 6 步用 pnpm 取一个 npm 包外不下载可执行文件；全程不写入密钥。
 set -euo pipefail
 
+# 用法：install.sh [--source-dir <deepseek-harness 源码仓库路径>]
+# 路径需含 apps/cli/src/bin.ts；提供后会写入仓库内 gitignored 的 .source-dir
+# 记录文件，之后 hooks/post-merge 的无参重跑会自动复用，无需每次指定。
+SOURCE_DIR_ARG=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --source-dir)
+      [ $# -ge 2 ] || { printf '%s\n' 'install.sh: --source-dir 需要一个路径参数' >&2; exit 2; }
+      SOURCE_DIR_ARG="$2"
+      shift 2
+      ;;
+    -h|--help)
+      printf '用法：install.sh [--source-dir <deepseek-harness 源码仓库路径>]\n'
+      exit 0
+      ;;
+    *)
+      printf 'install.sh: 未知参数 %s\n用法：install.sh [--source-dir <路径>]\n' "$1" >&2
+      exit 2
+      ;;
+  esac
+done
+
 HOME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_DIR="$HOME_DIR-data"
 OS_NAME="$(uname -s)"
@@ -153,10 +175,22 @@ elif command -v dsh >/dev/null 2>&1; then
   DSH_MODE="bin"
   DSH_BIN="$(command -v dsh)"
 else
-  for CAND in "${DSH_SOURCE_DIR:-}" "$HOME/Workspace/deepseek-harness" "$HOME/deepseek-harness"; do
+  # 源码目录解析顺序：--source-dir 参数 → .source-dir 记录 → DSH_SOURCE_DIR → 常见位置。
+  # 记录文件让一次性的参数（或启发式命中）在 hooks/post-merge 无参重跑时也能复用。
+  SOURCE_RECORD="$HOME_DIR/.source-dir"
+  RECORDED=""
+  [ -f "$SOURCE_RECORD" ] && RECORDED="$(tr -d '[:space:]' < "$SOURCE_RECORD")"
+  if [ -n "$SOURCE_DIR_ARG" ] && [ ! -f "$SOURCE_DIR_ARG/apps/cli/src/bin.ts" ]; then
+    warn "--source-dir 指定的路径缺少 apps/cli/src/bin.ts，不像 deepseek-harness 仓库: $SOURCE_DIR_ARG"
+  fi
+  for CAND in "$SOURCE_DIR_ARG" "$RECORDED" "${DSH_SOURCE_DIR:-}" "$HOME/Workspace/deepseek-harness" "$HOME/deepseek-harness"; do
     if [ -n "$CAND" ] && [ -f "$CAND/apps/cli/src/bin.ts" ]; then
       DSH_MODE="source"
-      DSH_SRC="$CAND"
+      DSH_SRC="$(cd "$CAND" && pwd)"
+      if [ "$DSH_SRC" != "$RECORDED" ]; then
+        printf '%s\n' "$DSH_SRC" > "$SOURCE_RECORD"
+        say "   已记录 DSH 源码目录 → $SOURCE_RECORD"
+      fi
       break
     fi
   done
@@ -169,12 +203,33 @@ dsh_run() {
     DSH_HOME="$HOME_DIR" "$DSH_BIN" "$@"
   fi
 }
-if [ -z "$DSH_MODE" ]; then
+# Node 版本护栏：源码模式经 pnpm 跑 dsh，Node < 22.13 时 pnpm 自身就会崩
+# （node:sqlite 等内置模块缺失），脚本只能笼统报「读不到 dsh 版本」。这里提前说清原因。
+SKIP_REASON=""
+if [ "$DSH_MODE" = "source" ]; then
+  NODE_VER="$(node -v 2>/dev/null || true)"
+  NODE_MAJOR="$(printf '%s' "$NODE_VER" | sed 's/^v\([0-9][0-9]*\)\..*$/\1/')"
+  NODE_MINOR="$(printf '%s' "$NODE_VER" | sed 's/^v[0-9][0-9]*\.\([0-9][0-9]*\)\..*$/\1/')"
+  NODE_OK=0
+  if [ -n "$NODE_MAJOR" ] && [ -n "$NODE_MINOR" ]; then
+    if [ "$NODE_MAJOR" -gt 22 ] || { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_MINOR" -ge 13 ]; }; then
+      NODE_OK=1
+    fi
+  fi
+  if [ "$NODE_OK" -ne 1 ]; then
+    SKIP_REASON="node ${NODE_VER:-缺失} 低于 22.13，源码模式的 pnpm dsh 无法运行（切换 Node 后重跑），跳过 $MEM_PKG"
+  fi
+fi
+if [ -n "$SKIP_REASON" ]; then
+  warn "$SKIP_REASON"
+elif [ -z "$DSH_MODE" ]; then
   warn "找不到 dsh 命令（打包版 Desktop 不把 CLI 放进 PATH），跳过 $MEM_PKG"
   say "   手动安装（每台机器、每个 profile 各一次）："
   say "     dsh plugin --profile desktop allow-version $MEM_PKG --dsh-version <dsh -V> --accept-risk"
   say "     dsh plugin --profile desktop add $MEM_PKG"
-  say "   或设置 DSH_CLI（dsh 可执行文件路径）／ DSH_SOURCE_DIR（DSH 源码目录）后重跑本脚本"
+  say "   或用 --source-dir 指定 deepseek-harness 源码仓库路径后重跑本脚本："
+  say "     ./install.sh --source-dir ~/Workspace/deepseek-harness"
+  say "   （也可设置 DSH_CLI / DSH_SOURCE_DIR 环境变量；命中一次后会记录到 .source-dir，之后 pull 触发的重跑自动复用）"
 else
   DSH_VER="$(dsh_run -V 2>/dev/null | tail -1 | tr -d '[:space:]')"
   case "$DSH_VER" in
@@ -185,9 +240,11 @@ else
     warn "读不到 dsh 版本（模式：${DSH_MODE}），跳过 $MEM_PKG"
   else
     TOUCHED=0
+    INITIALIZED=0
     for PDIR in "$HOME_DIR"/profiles/*/; do
       [ -d "$PDIR" ] || continue
       [ -f "$PDIR/package.json" ] || continue
+      INITIALIZED=$((INITIALIZED + 1))
       PNAME="$(basename "$PDIR")"
       LOG="$(mktemp)"
       if ! dsh_run plugin --profile "$PNAME" allow-version "$MEM_PKG" --dsh-version "$DSH_VER" --accept-risk >"$LOG" 2>&1; then
@@ -219,7 +276,7 @@ else
       fi
       TOUCHED=$((TOUCHED + 1))
     done
-    if [ "$TOUCHED" -eq 0 ]; then
+    if [ "$TOUCHED" -eq 0 ] && [ "$INITIALIZED" -eq 0 ]; then
       warn "profile 还没初始化（profiles/*/package.json 不存在），本次跳过 $MEM_PKG"
       say "   新机器首次运行时这是正常的：profile 由 DSH 自己创建，仓库只跟踪 profiles/*/cordis.patch.yml。"
       say "   启动一次 DSH（Desktop 应用，或 dsh --profile <名字>）后再跑一次本脚本，就会自动装上；"

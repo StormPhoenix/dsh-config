@@ -3,6 +3,13 @@
 # 首次安装与每次 `git pull` 之后执行同一个脚本，由 hooks/post-merge 自动调用。
 # 做四件事：把机器专属配置落位（含数据分根）、迁移既有数据、确保记忆插件就位、
 # 体检外部工具与密钥。除第 6 步用 pnpm 取一个 npm 包外不下载可执行文件；全程不写入密钥。
+[CmdletBinding()]
+param(
+  # deepseek-harness 源码仓库路径（需含 apps\cli\src\bin.ts）。
+  # 提供后会写入本仓库下 gitignored 的 .source-dir 记录文件，
+  # 之后 hooks/post-merge 的无参重跑会自动复用，无需每次指定。
+  [string]$SourceDir
+)
 $ErrorActionPreference = 'Stop'
 
 $HomeDir = $PSScriptRoot
@@ -141,11 +148,23 @@ if ($env:DSH_CLI) {
   $dshMode = 'bin'
   $dshBin = (Get-Command dsh).Source
 } else {
-  $cands = @($env:DSH_SOURCE_DIR, (Join-Path $env:USERPROFILE 'Workspace\deepseek-harness'), (Join-Path $env:USERPROFILE 'deepseek-harness'))
+  # 源码目录解析顺序：-SourceDir 参数 → .source-dir 记录 → DSH_SOURCE_DIR → 常见位置。
+  # 记录文件让一次性的参数（或启发式命中）在 hooks/post-merge 无参重跑时也能复用。
+  $sourceRecord = Join-Path $HomeDir '.source-dir'
+  $recorded = ''
+  if (Test-Path $sourceRecord) { $recorded = (Get-Content $sourceRecord -Raw -Encoding UTF8).Trim() }
+  if ($SourceDir -and -not (Test-Path (Join-Path $SourceDir 'apps\cli\src\bin.ts'))) {
+    Warn "-SourceDir 指定的路径缺少 apps\cli\src\bin.ts，不像 deepseek-harness 仓库: $SourceDir"
+  }
+  $cands = @($SourceDir, $recorded, $env:DSH_SOURCE_DIR, (Join-Path $env:USERPROFILE 'Workspace\deepseek-harness'), (Join-Path $env:USERPROFILE 'deepseek-harness'))
   foreach ($c in $cands) {
     if ($c -and (Test-Path (Join-Path $c 'apps\cli\src\bin.ts'))) {
       $dshMode = 'source'
-      $dshSrc = $c
+      $dshSrc = (Resolve-Path $c).Path
+      if ($dshSrc -ne $recorded) {
+        [System.IO.File]::WriteAllText($sourceRecord, $dshSrc + "`n", (New-Object System.Text.UTF8Encoding($false)))
+        Say "   已记录 DSH 源码目录 → $sourceRecord"
+      }
       break
     }
   }
@@ -154,12 +173,30 @@ function Invoke-Dsh {
   param([Parameter(ValueFromRemainingArguments = $true)] $Rest)
   if ($dshMode -eq 'source') { & pnpm -C $dshSrc dsh @Rest } else { & $dshBin @Rest }
 }
-if (-not $dshMode) {
+# Node 版本护栏：源码模式经 pnpm 跑 dsh，Node < 22.13 时 pnpm 自身就会崩
+# （node:sqlite 等内置模块缺失），脚本只能笼统报「读不到 dsh 版本」。这里提前说清原因。
+$skipReason = ''
+if ($dshMode -eq 'source') {
+  $nodeVer = ''
+  if (Get-Command node -ErrorAction SilentlyContinue) { $nodeVer = (& node -v 2>$null | Select-Object -First 1) }
+  $nodeOk = $false
+  if ("$nodeVer" -match '^v(\d+)\.(\d+)') {
+    $nodeOk = ([int]$Matches[1] -gt 22) -or (([int]$Matches[1] -eq 22) -and ([int]$Matches[2] -ge 13))
+  }
+  if (-not $nodeOk) {
+    $skipReason = "node ${nodeVer} 低于 22.13，源码模式的 pnpm dsh 无法运行（如 nvm use 22.19.0 后重跑），跳过 $memPkg"
+  }
+}
+if ($skipReason) {
+  Warn $skipReason
+} elseif (-not $dshMode) {
   Warn "找不到 dsh 命令（打包版 Desktop 不把 CLI 放进 PATH），跳过 $memPkg"
   Say "   手动安装（每台机器、每个 profile 各一次）："
   Say "     dsh plugin --profile desktop allow-version $memPkg --dsh-version <dsh -V> --accept-risk"
   Say "     dsh plugin --profile desktop add $memPkg"
-  Say "   或设置 DSH_CLI（dsh 可执行文件路径）/ DSH_SOURCE_DIR（DSH 源码目录）后重跑本脚本"
+  Say "   或用 -SourceDir 指定 deepseek-harness 源码仓库路径后重跑本脚本："
+  Say "     .\install.ps1 -SourceDir G:\Workspace\deepseek-harness"
+  Say "   （也可设置 DSH_CLI / DSH_SOURCE_DIR 环境变量；命中一次后会记录到 .source-dir，之后 pull 触发的重跑自动复用）"
 } else {
   # 原生命令写到 stderr 的内容在 $ErrorActionPreference='Stop' 下可能被当成终止错误，这里放宽
   $prevEap = $ErrorActionPreference
@@ -167,14 +204,19 @@ if (-not $dshMode) {
   # 子进程显式带上 DSH_HOME=本仓库：避免未设置或设错时把插件装到别的 home
   $prevHome = $env:DSH_HOME
   $env:DSH_HOME = $HomeDir
-  $dshVer = (Invoke-Dsh -V 2>$null | Select-Object -Last 1)
+  # 注意用数组展开而不是直接写 -V：声明了 ValueFromRemainingArguments 的函数是高级函数，
+  # 拥有 -Verbose 等公共参数，而 -V 恰是 -Verbose 的唯一前缀缩写，会被参数绑定器截走，
+  # 导致 dsh 裸跑并报「--profile <name> is required」。数组展开不经过参数名解析，可避免。
+  $dshVer = (Invoke-Dsh @('-V') 2>$null | Select-Object -Last 1)
   if ($dshVer) { $dshVer = $dshVer.Trim() }
   if (-not $dshVer -or $dshVer -notmatch '^[0-9]+\.[0-9]') {
     Warn "读不到 dsh 版本（模式：${dshMode}），跳过 $memPkg"
   } else {
     $touched = 0
+    $initialized = 0
     foreach ($pdir in (Get-ChildItem (Join-Path $HomeDir 'profiles') -Directory -ErrorAction SilentlyContinue)) {
       if (-not (Test-Path (Join-Path $pdir.FullName 'package.json'))) { continue }
+      $initialized++
       $name = $pdir.Name
       $log = [System.IO.Path]::GetTempFileName()
       Invoke-Dsh plugin --profile $name allow-version $memPkg --dsh-version $dshVer --accept-risk *> $log
@@ -209,7 +251,7 @@ if (-not $dshMode) {
       }
       $touched++
     }
-    if ($touched -eq 0) {
+    if ($touched -eq 0 -and $initialized -eq 0) {
       Warn "profile 还没初始化（profiles\*\package.json 不存在），本次跳过 $memPkg"
       Say "   新机器首次运行时这是正常的：profile 由 DSH 自己创建，仓库只跟踪 profiles\*\cordis.patch.yml。"
       Say "   启动一次 DSH（Desktop 应用，或 dsh --profile <名字>）后再跑一次本脚本，就会自动装上；"
