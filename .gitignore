@@ -21,6 +21,12 @@
 !backup.ps1
 !/plugin-transfer.py
 !/plugin-transfer.test.py
+# 用户技能随配置仓库同步，不包括技能内缓存或依赖。
+!/skills/**
+skills/**/node_modules/
+skills/**/__pycache__/
+skills/**/.DS_Store
+skills/**/.git/
 !hooks/**
 !machines/**
 !profiles/*/cordis.patch.yml
