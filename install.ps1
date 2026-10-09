@@ -127,7 +127,7 @@ if (Test-Path $src) {
   }
   # 自检：数据分根覆盖行是否齐全（行 id 一旦被 DSH 改名，这里会响铃）
   $missing = @()
-  foreach ($row in @('session-persistence-jsonl', 'attachment-local', 'storage-json', 'credentials', 'spill-local')) {
+  foreach ($row in @('session-persistence-jsonl', 'attachment-local', 'storage-json', 'credentials', 'spill-local', 'memory')) {
     if (-not (Select-String -Path $dst -Pattern "id: $row" -Quiet)) { $missing += $row }
   }
   if (Select-String -Path $dst -Pattern '__DSH_DATA__' -Quiet) {
@@ -135,7 +135,7 @@ if (Test-Path $src) {
   } elseif ($missing.Count -gt 0) {
     Warn "机器层缺少数据分根覆盖行：$($missing -join ', ') —— 这些数据会退回 `$DSH_HOME 内"
   } else {
-    Ok "数据分根覆盖行齐全（5/5），数据根 = $DataDir"
+    Ok "数据分根覆盖行齐全（6/6），数据根 = $DataDir"
   }
 } else {
   Warn "缺少 machines\windows.cordis.patch.yml，机器层未生成"

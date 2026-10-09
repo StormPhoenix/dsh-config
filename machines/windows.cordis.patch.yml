@@ -10,6 +10,8 @@
 # 因此仓库里的 `git clean -x` 会连会话记录、凭据、附件一起删除。
 # 下面 5 行把「不可再生」的数据改写到仓库之外的数据根，
 # 使任何 git 命令都无法再触达它们；留在仓库里的只剩配置和可再生产物。
+# 第 6 行（memory）是插件数据：dsh-memory 的默认库落在 $DSH_HOME 内，
+# 同属不可再生数据，由插件归档恢复的机器都会用到，一并分根。
 #
 # 补丁是「整行替换」：这里必须重述该行所需的键（其余键用 schema 默认值）。
 #
@@ -56,3 +58,16 @@
   name: "@deepseek-ai/dsh-spill-local"
   config:
     root: __DSH_DATA__/spill
+
+# ── 记忆插件 dsh-memory：把长期记忆库移出仓库工作树 ────────────────────
+# 插件未安装时，DSH 会静默忽略这个悬空行，所以未装该插件的机器可常驻此行。
+- id: memory
+  name: dsh-memory
+  config:
+    path: __DSH_DATA__/memory/memory.db
+    promptRecentCount: 10
+    promptMaxChars: 2000
+    maxTextChars: 2000
+    searchLimitDefault: 10
+    searchLimitMax: 50
+    promptOrder: 50

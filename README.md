@@ -47,17 +47,17 @@ DSH 按顺序叠加四层，**后一层按行覆盖前一层**：
 
 DSH 的出厂设计是「所有用户数据放在同一个 `$DSH_HOME` 下」，而本仓库把 `$DSH_HOME` 当成了仓库工作树。两者叠加的后果是：**在仓库里跑一条 `git clean -xdf`，会话历史、凭据、附件会被一起删掉** —— `-x` 连被忽略的文件都删。
 
-所以机器层用 5 行把不可再生数据改写到仓库之外的数据根：
+所以机器层用 6 行把不可再生数据改写到仓库之外的数据根：
 
 | 行 id | 配置字段 | 改写到 |
-|---|---|---|
-| `session-persistence-jsonl` | `root` | `~/.dsh-data/sessions` |
+|---|---|---|| `session-persistence-jsonl` | `root` | `~/.dsh-data/sessions` |
 | `attachment-local` | `dshHome` | `~/.dsh-data`（附件落在 `<数据根>/attachments/v1`） |
 | `storage-json` | `root` | `~/.dsh-data/storages` |
 | `credentials` | `path` | `~/.dsh-data/.credentials.yaml` |
 | `spill-local` | `root` | `~/.dsh-data/spill` |
+| `memory` | `path` | `~/.dsh-data/memory/memory.db`（dsh-memory 插件的长期记忆库；插件未装时该行被静默忽略） |
 
-这 5 个字段都是各插件在 bundle 层就已暴露的配置项（`packages/bundle/base/cordis.patch.yml` 里的 `dshHomePath('sessions')`、`dshHomePath('storages')` 就是它们的默认值），因此不需要补丁、软链接或 fork 任何 DSH 代码。
+前 5 个字段都是各插件在 bundle 层就已暴露的配置项（`packages/bundle/base/cordis.patch.yml` 里的 `dshHomePath('sessions')`、`dshHomePath('storages')` 就是它们的默认值），因此不需要补丁、软链接或 fork 任何 DSH 代码。第 6 个 `memory` 属于外部插件 `dsh-memory`，它自带的默认值是 `dshHomePath('memory/memory.db')`，同样落在 `$DSH_HOME` 内，因此也要改写。
 
 **实测对比**（在一次性副本上跑真实命令）：
 
@@ -67,9 +67,9 @@ DSH 的出厂设计是「所有用户数据放在同一个 `$DSH_HOME` 下」，
 | `git reset --hard` / `git checkout -f` | 数据无恙 | 数据无恙（只丢弃已跟踪文件的未提交修改） |
 | `git clean -fd`（不带 `-x`） | 无操作 | 无操作 |
 
-数据根路径由 `machines/<os>.cordis.patch.yml` 里的 `__DSH_DATA__` 占位符表示，`install.sh` / `install.ps1` 生成机器层时替换成本机真实路径，并在最后**自检 5 行是否齐全**：将来 DSH 改了行 id，脚本会 `warn` 而不是静默退回 home。
+数据根路径由 `machines/<os>.cordis.patch.yml` 里的 `__DSH_DATA__` 占位符表示，`install.sh` / `install.ps1` 生成机器层时替换成本机真实路径，并在最后**自检 6 行是否齐全**：将来 DSH 改了行 id，脚本会 `warn` 而不是静默退回 home。
 
-> **代价与限制**：这偏离了 DSH「单根目录」的出厂约定。如果将来 DSH 新增了写在 home 里的数据存储，它**不会**自动被分根，需要按上表的模式补一行；自检只覆盖已知的这 5 个行 id。
+> **代价与限制**：这偏离了 DSH「单根目录」的出厂约定。如果将来 DSH 新增了写在 home 里的数据存储，它**不会**自动被分根，需要按上表的模式补一行；自检只覆盖已知的这 6 个行 id。
 
 ## 新机器首次使用
 
