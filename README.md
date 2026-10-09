@@ -99,9 +99,9 @@ cd "$env:USERPROFILE\.dsh"; .\install.ps1
 
 ## 用户技能
 
-`skills/` 是 DSH 默认扫描的用户技能目录，随本仓库一起同步，不需要额外复制或安装脚本。第一批包含 13 个从 Craft 转换的技能及完整参考资料，来源库不受影响。
+`skills/` 是 DSH 默认扫描的用户技能目录，随本仓库一起同步，不需要额外复制或安装脚本。第一批包含 13 个从 Craft 转换的技能及完整参考资料，来源库不受影响；新增 `equity-deep-research`（A 股个股迭代分析树，含 `references/` 与 `scripts/repay_period.py`），共 14 个。
 
-在聊天中输入 `/技能名` 加任务要求即可主动调用，例如 `/deep-research 请先生成大纲`。9 个工作流技能允许模型按用途加载；人物视角只允许用户显式调用 `/li-daxiao`、`/maqianzu`、`/mao-zedong-perspective`、`/xingzhongheng-perspective`。实际工具与权限由所用 DSH profile 决定，复制技能不会安装 MCP 或注册新工具。
+在聊天中输入 `/技能名` 加任务要求即可主动调用，例如 `/deep-research 请先生成大纲`。10 个工作流技能允许模型按用途加载；人物视角只允许用户显式调用 `/li-daxiao`、`/maqianzu`、`/mao-zedong-perspective`、`/xingzhongheng-perspective`。实际工具与权限由所用 DSH profile 决定，复制技能不会安装 MCP 或注册新工具。
 
 保持包内资料相对技能根目录引用；输出写到用户工作区，不写安装目录。更新或同步前先提交个人修改，不用原 Craft 库直接覆盖 DSH 副本。
 
