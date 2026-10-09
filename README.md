@@ -73,7 +73,7 @@ DSH 的出厂设计是「所有用户数据放在同一个 `$DSH_HOME` 下」，
 
 ## 新机器首次使用
 
-源码开发版 Desktop 的完整初始化、首次启动、插件恢复和失败处理见[新机器指南](NEW-MACHINE-GUIDE.md)。
+源码开发版 Desktop 的配置初始化、首次启动和手动插件安装见[新机器指南](NEW-MACHINE-GUIDE.md)。
 
 ```sh
 # macOS / Linux
@@ -89,48 +89,13 @@ cd "$env:USERPROFILE\.dsh"; .\install.ps1
 
 之后**重开终端**（让 `DSH_HOME` 生效）；如果之前已经启动过 Desktop，也重启一次。
 
-安装版 Desktop 可继续使用以上流程。源码开发版使用下一节的一参数 setup / bootstrap；DSH 源码与配置 home 分开，不把配置放进源码的 `.desktop-build`。
+## 插件按机器手动安装
 
-## 源码 Desktop：只传一个源码路径
+本仓库只同步配置、用户技能和配置/数据备份脚本，不包含插件源码、安装包、子模块、Git LFS 或批量恢复入口。`git pull` 不安装、卸载或更新任何插件。
 
-准备现有 DSH 源码 checkout、Python 3.9+、Git / Git LFS、Node `^22.19 || >=24` 和 pnpm。源码根目录必须有 `desktop:plugin`、`dev:desktop` package scripts 和已准备好的 `node_modules`。本脚本不克隆或更新源码、不安装系统工具或源码依赖，不批准构建脚本；源码构建及其依赖需单独准备。配置仓库与源码目录不能互相嵌套。
+每台机器先安装或构建所需版本的 DSH，运行本仓库的 `install.sh` / `install.ps1` 初始化配置，再启动目标应用。Desktop 插件通过该应用的插件管理页面或应用内 `plugin_manager` 手动安装；不要用普通 Web/CLI profile 替代 Desktop 的管理入口。核对插件与当前 DSH 的兼容性，不自动放开版本限制。
 
-```sh
-# macOS / Linux：唯一必填位置参数是现有源码根目录
-bash ~/.dsh/setup-dev.sh "$HOME/Workspace/deepseek-harness"
-# 只验证并生成计划；不初始化配置，也不安装插件
-bash ~/.dsh/setup-dev.sh "$HOME/Workspace/deepseek-harness" --prepare-only
-```
-
-```powershell
-# Windows
-& "$env:USERPROFILE\.dsh\setup-dev.ps1" 'D:\Workspace\deepseek-harness'
-```
-
-`setup-dev.py` 把 `DSH_HOME` 固定为脚本所在配置仓库，把 `DSH_SOURCE_DIR` 固定为唯一的源码参数；不需要手工 export 或第二个 home 参数。完整 setup 先拒绝配置仓库的未提交修改，然后验证全部插件归档及原生文件 OS/架构，从现有 `plugins/` 的 LFS 文件生成持久 staging（默认 `~/.dsh` 旁的 `dsh-plugin-staging/desktop-<随机值>/`），再调用原有平台 install 脚本初始化配置。可用 `--archive /path/to/backup.zip` 替代子模块，可用 `--staging /new/absolute/directory` 指定不存在且在两仓库之外的目录。`--prepare-only` 可以检查脏配置，但不会改配置文件；prepare-only 不拉取子模块或 LFS；完整 setup 会初始化固定子模块并下载 LFS，不更新到远端最新提交。
-
-Desktop 默认 profile 必须由第一次启动创建。若还没有 `profiles/desktop/package.json`，setup 完成配置初始化后停止，不安装任何插件；按提示从源码目录用明确的 `DSH_HOME` 执行 `pnpm run dev:desktop`，确认初始化后完全退出 Desktop，审查启动写入的配置变化，再重跑 setup。已有脏 home 绝不 reset、pull 或覆盖；先自行保留、审查修改。
-
-安装仅执行源码根的 `pnpm run desktop:plugin -- restore <plan.json>`，计划字段为 `{format:1, plugins:[{name,version,sha256,archive,enabled}], order:[启用包名]}`；`archive` 是持久 staging 中的绝对 `.tgz` 路径。该 Desktop 专用命令在批次期间持有 Desktop ownership，预验证所有包，保留目标额外插件并恢复备份中的启停状态与顺序，默认不执行安装脚本；不要替换成普通 `pnpm dsh plugin --profile desktop`。失败立即停止并返回子进程非零状态，可能保留已完成的包安装，不承诺跨包回滚。保留 staging 供重装使用；完成后重新启动 Desktop 并核对插件版本、启停状态和功能。
-
-### 可单独下载的 bootstrap
-
-配置远端为 `git@github.com:StormPhoenix/dsh-config.git`，需要已有 SSH 访问权限。下载并审查 `bootstrap.sh` / `bootstrap.ps1` 后执行，仍只传同一个现有源码路径；包装脚本通过 HTTPS 下载同仓库的 `bootstrap.py` 到临时文件，不修改执行策略。raw GitHub 地址必须可访问；私有仓库可通过已认证渠道下载 `bootstrap.py` 并直接运行 `python3 /path/to/bootstrap.py <source>`（Windows 用 `python`）。不要把凭据写入脚本。
-
-```sh
-curl --fail --location https://raw.githubusercontent.com/StormPhoenix/dsh-config/main/bootstrap.sh --output /tmp/dsh-bootstrap.sh
-# 审查下载内容后执行；可附加 --prepare-only
-bash /tmp/dsh-bootstrap.sh "$HOME/Workspace/deepseek-harness"
-```
-
-```powershell
-Invoke-WebRequest 'https://raw.githubusercontent.com/StormPhoenix/dsh-config/main/bootstrap.ps1' -OutFile "$env:TEMP\dsh-bootstrap.ps1"
-& "$env:TEMP\dsh-bootstrap.ps1" 'D:\Workspace\deepseek-harness'
-```
-
-bootstrap 只在默认 `~/.dsh` 不存在时克隆配置仓库；已有 home 必须是相同 origin 的干净 checkout，否则停止并保留原状。已有 checkout 不自动 `git pull`，子模块用 `update --init --recursive` 恢复已记录 commit，不用 `--remote` 更新指针，再对所有子模块执行 `git lfs pull`，最后运行配置仓库中的 setup。不会提交或推送。本配置和插件远端/LFS 对象必须先发布；远端未发布或权限不足会以非零状态停止。
-
-隔离测试只使用临时目录与模拟子进程，不克隆、初始化真实 home 或安装插件：`python3 setup-dev.test.py`、`python3 bootstrap.test.py`（Windows 使用 `python`）。
+共享 patch 可保留插件配置，但配置不会创建插件依赖；插件未安装时对应覆盖可能不生效，新增插件行必须先确认依赖可解析。`profiles/*/package.json`、锁文件、`node_modules` 和运行时只留在本机，不参与 Git 同步。手动安装本地 `.tgz` 时，将其放在配置和源码仓库之外的持久目录，并保留安装来源。
 
 ## 用户技能
 
@@ -230,75 +195,10 @@ cd ~/Workspace/deepseek-harness && pnpm run dev:desktop
 
 ## 已知限制
 
-- **插件不会仅凭 Git 同步自动安装。** profile 的依赖清单与依赖目录不参与 Git 同步；使用下方「插件打包与跨机器恢复」生成插件归档，再通过目标机器的官方插件管理入口安装。
+- **插件不会仅凭 Git 同步自动安装。** profile 的依赖清单与依赖目录不参与 Git 同步；每台机器通过目标应用的插件管理入口手动安装，并核对兼容性、版本和启停状态。
 - **`dsh-runtimes/`（离线运行时，约 370MB）不迁移**，新 home 首次需要时会自行安装。它现在也是 `git clean -x` 唯一会波及的东西（可重建，只是慢）。
 - **数据根不会自动跟随 home 移动。** 数据根 = `<本仓库目录>-data`；如果以后把仓库 clone 到别处，旧数据需要手动 `cp -R` 过去（应用退出后操作）。
 - **新增的 home 数据存储不会自动分根。** DSH 若新增写在 home 里的存储，需要按「数据分根」一节的模式补一行覆盖；脚本自检只覆盖已知的 6 个行 id。
-
-## 插件私有子模块
-
-`plugins/` 是独立 `dsh-plugin-archive` 仓库的 submodule。配置、用户技能和安装脚本仍由本仓库管理；插件包与宠物本地修改源码由子模块管理。插件安装包和素材使用 Git LFS，不提交依赖目录、凭据、会话或插件个人数据。
-
-新机器先安装 Git LFS、Python 3.9+ 和受支持的 Harness。两仓库发布后，使用 `git clone --recurse-submodules` 克隆本仓库，再执行 `git -C "$HOME/.dsh/plugins" lfs pull`。子模块 URL 为同账户相对路径 `../dsh-plugin-archive.git`；插件仓库已发布到 `git@github.com:StormPhoenix/dsh-plugin-archive.git`，配置仓库的新脚本和子模块指针也需提交推送后才能用于新机器。
-
-```sh
-# 先验证所有插件，再配置环境并准备 Desktop 插件安装清单
-python3 ~/.dsh/plugin-repo.py verify
-bash ~/.dsh/install.sh --with-plugins --profile desktop
-# 打包安装版 Desktop：注册该应用提供的 CLI，初始化 profile，退出应用后自动安装
-bash ~/.dsh/install.sh --with-plugins --profile desktop --cli dsh --app-closed
-```
-
-Windows 对应执行 `python plugin-repo.py verify` 和 `./install.ps1 --with-plugins --profile desktop`，自动安装时同样附加 `--cli dsh --app-closed`。不指定 profile 时准备全部归档 profile。未指定 CLI 时仅准备清单，不安装；这组旧入口对开发态 Desktop 只准备应用内安装清单；源码开发版的自动恢复请使用上方 `setup-dev.sh` / `setup-dev.ps1`，由专用 `desktop:plugin restore` 批次执行。普通 npm 或 `pnpm dsh` CLI 不能管理 Desktop。配置脚本会进行原有环境设置；插件恢复不覆盖 profile 文件、不自动豁免版本、不执行包安装脚本。
-
-`python3 plugin-repo.py export --repository /path/to/new-staging-directory` 可从已安装插件生成新快照；已有归档不直接覆盖。审查后先提交插件仓库，再提交本仓库的 submodule 指针。发布时先推送插件仓库及 LFS 对象，再推送配置仓库。归档不是完整离线依赖镜像；恢复后仍需核对版本、启用状态与实际功能。详细包清单见子模块的 `manifest.json`。
-
-## 插件打包与跨机器恢复
-
-需要 Python 3.9+（Windows 默认 `python`，macOS/Linux 默认 `python3`，可用 `DSH_TRANSFER_PYTHON` 指定解释器）。插件归档与原有数据归档相互独立，不会更改正在运行的 profile。
-
-源机器打包已经安装的外部 bundle，固定实际安装版本，不执行包的构建或发布脚本：
-
-```powershell
-# Windows：只打包 Desktop；省略 --profile 则扫描所有已初始化 profile
-.\backup.ps1 --plugins --profile desktop --out D:\dsh-backups
-```
-
-```sh
-# macOS / Linux
-bash ./backup.sh --plugins --profile desktop --out "$HOME/dsh-backups"
-```
-
-生成 `dsh-plugins-<时间戳>.zip`，内含插件清单、启用顺序、SHA-256 校验值及每个插件的 `.tgz`。不含 `node_modules`、宿主包、版本豁免、配置、会话、凭据或插件自己的数据；插件包内部的可执行文件仍是受信任代码，归档只应来自可信机器。已安装包中的符号链接会使备份失败，而不是生成可能跨机器失效的归档。
-
-目标机器先安装 Harness、初始化所需 profile，然后复制归档并解压校验：
-
-```powershell
-.\install.ps1 --plugins D:\dsh-backups\dsh-plugins-<时间戳>.zip --profile desktop
-```
-
-```sh
-bash ./install.sh --plugins /path/to/dsh-plugins-<时间戳>.zip --profile desktop
-```
-
-不带 `--cli` 时只解压到仓库旁的 `dsh-plugin-restore-<时间戳>/`，不安装、不改 profile，并列出安装顺序，生成 `INSTALL-IN-APP.txt`；可将这份清单交给目标 Desktop 内的智能体，通过 `plugin_manager` 安装。**开发态 Desktop（包括 `pnpm run start:desktop`）请用应用的插件管理页面或应用内 `plugin_manager`，按清单顺序安装解压出的 `.tgz` 文件；原先禁用的插件安装后仍应禁用。** 不要直接覆盖 profile 的依赖清单或 `node_modules`。保留解压目录，因为安装后的本地归档来源可能在重装时使用。
-
-打包安装版 Desktop 可先通过「Manage dsh Command」注册其 CLI，初始化 Desktop profile 后完全退出应用，再运行自动安装；普通 npm 或源码 CLI 无权管理 Desktop profile：
-
-```powershell
-.\install.ps1 --plugins D:\backup.zip --profile desktop --cli dsh --app-closed
-```
-
-```sh
-# Web 等普通 profile 使用普通 dsh CLI；先退出目标 Harness
-bash ./install.sh --plugins /path/to/backup.zip --profile web --cli /path/to/dsh --app-closed
-```
-
-自动安装走官方 `dsh plugin`，保留目标机器已有插件，默认阻止构建脚本；兼容性失败时停止，不自动豁免。归档包含禁用 bundle 时拒绝自动安装，改用应用插件管理入口保留启停状态。安装不是跨插件事务：中途失败时前面已成功安装的插件会保留，需检查后再继续。目标机器已有的 bundle 顺序不被覆盖。
-
-**这不是完全离线依赖镜像。** 插件自身文件可离线带走，但传递依赖由目标包管理器解析，可能需要网络；原生文件所在包要求源/目标 OS 与架构相同，跨平台应在目标平台重新获取兼容包。插件自己下载的运行时（例如 dsh-pet 的 Electron）、用户动画、宠物配置与对话记忆也不包含；数据归档只覆盖 `<仓库>-data`，插件写入 `$DSH_HOME` 的数据需另外备份。安装后启动 Harness，在插件页核对版本、启停状态与实际功能。
-
-测试不访问真实 profile、不执行安装：`python plugin-transfer.test.py`（macOS/Linux 使用 `python3`）。
 
 ## 备份
 

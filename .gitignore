@@ -20,20 +20,8 @@
 !install.ps1
 !backup.sh
 !backup.ps1
-!/plugin-transfer.py
-!/plugin-transfer.test.py
-!/plugin-repo.py
-!/plugin-repo.test.py
-!/setup-dev.py
-!/setup-dev.test.py
-!/setup-dev.sh
-!/setup-dev.ps1
-!/bootstrap.py
-!/bootstrap.test.py
-!/bootstrap.sh
-!/bootstrap.ps1
-!/.gitmodules
-!/plugins
+# Plugin code, archives and installed dependencies are machine-local, never synchronized.
+/plugins/
 # 用户技能随配置仓库同步，不包括技能内缓存或依赖。
 !/skills/**
 skills/**/node_modules/
