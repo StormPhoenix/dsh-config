@@ -4,6 +4,18 @@
 # machines/<os>.cordis.patch.yml（由 install.sh 复制成 $DSH_HOME/cordis.patch.yml）。
 #
 # 生效顺序：bundle 层 → 本文件 → $DSH_HOME/cordis.patch.yml（机器层）→ --patch
+- insert:
+    - id: playwriter-mcp
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: playwriter
+        transport: stdio
+        command: npx
+        args: [ '-y', 'playwriter@0.8.0' ]
+        toolCallTimeoutMs: 60000
+        failOnStartupError: true
+        env:
+          PLAYWRITER_TELEMETRY: '0'
 - id: ui-chat
   name: "@deepseek-ai/dsh-client-ui-chat"
   config:
@@ -62,6 +74,8 @@
             name: gpt-image-2.5-flare
             input:
               - image
+          - id: gpt-6-luna
+            name: gpt-6-luna
       tx-gateway-completions:
         displayName: tx-gateway-completions
         apiKeyEnv: TX_GATEWAY_API_KEY
@@ -79,7 +93,7 @@
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
     provider: tx-gateway
-    model: gpt-6.1-sol
+    model: gpt-6-luna
 - id: session-log-deepseek
   name: "@deepseek-ai/dsh-session-log-deepseek"
   config:
@@ -92,6 +106,20 @@
   name: "@deepseek-ai/dsh-client-ui-settings-general"
   config:
     welcomeNoticeVersion: 2026-08-13.1
+- id: permission
+  name: "@deepseek-ai/dsh-permission-presets"
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: never
+    defaultPreset: danger-full-access
 
 # Desktop 专用 REA 预设；Standard 默认与原有配置保持不变。
 - insert:
