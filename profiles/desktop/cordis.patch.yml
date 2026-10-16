@@ -19,8 +19,9 @@
 - id: ui-chat
   name: "@deepseek-ai/dsh-client-ui-chat"
   config:
-    transcriptView: standard
+    transcriptView: detailed
     performanceUsage: detailed
+    collapseTiming: next-input
 - id: ui-settings
   name: "@deepseek-ai/dsh-client-ui-settings"
   config:
@@ -76,6 +77,9 @@
               - image
           - id: gpt-6-luna
             name: gpt-6-luna
+            input:
+              - text
+              - image
       tx-gateway-completions:
         displayName: tx-gateway-completions
         apiKeyEnv: TX_GATEWAY_API_KEY
@@ -92,8 +96,8 @@
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: tx-gateway
-    model: gpt-6-luna
+    provider: tx-gateway-completions
+    model: glm-5.3-flash
 - id: session-log-deepseek
   name: "@deepseek-ai/dsh-session-log-deepseek"
   config:
@@ -270,3 +274,24 @@
               cwd: 'G:/Workspace/rea'
               toolCallTimeoutMs: 60000
               failOnStartupError: true
+- id: image-gen
+  name: dsh-image-gen
+  config:
+    provider: openai-compat
+    openaiBaseURL: http://api-skynetyu.woa.com/v1
+    openaiModel: gpt-image-2
+    openaiSizes: {}
+    openaiCompatBaseURL: http://api-skynetyu.woa.com/v1
+    openaiCompatModel: gpt-image-2
+    openaiCompatQuality: ""
+    openaiCompatQualityOptions:
+      - auto
+      - low
+      - medium
+      - high
+    openaiCompatExtraBody: {}
+    openaiCompatEditSizeMode: auto
+    openaiCompatEditFormat: multipart
+    openaiCompatEditExtra: {}
+    openaiCompatSizes: {}
+    showProviderPill: true
