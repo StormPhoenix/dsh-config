@@ -306,3 +306,11 @@
     autoSummarizeMaxMemories: 5
     autoSummarizeMaxTokens: 2048
     staleAfterDays: 0
+- id: image-gen
+  disabled: true
+- id: web-search-free
+  name: dsh-web-search-free
+  config:
+    tavilyApiKey: |-
+      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
+      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
