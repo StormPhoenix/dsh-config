@@ -96,8 +96,9 @@
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: tx-gateway
-    model: deepseek-v4-flash
+    provider: deepseek-official
+    model: deepseek-flash
+    reasoningEffort: high
 - id: session-log-deepseek
   name: "@deepseek-ai/dsh-session-log-deepseek"
   config:
@@ -295,3 +296,13 @@
     openaiCompatEditExtra: {}
     openaiCompatSizes: {}
     showProviderPill: true
+# 会话结束自动固化记忆（autoSummarize）；其余字段与插件默认值一致，显式写出以免整表覆盖时丢失。
+- id: auto-memory
+  name: dsh-auto-memory
+  config:
+    maxBytes: 4096
+    enableUserScope: true
+    autoSummarize: true
+    autoSummarizeMaxMemories: 5
+    autoSummarizeMaxTokens: 2048
+    staleAfterDays: 0
