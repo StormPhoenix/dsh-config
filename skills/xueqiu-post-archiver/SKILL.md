@@ -51,6 +51,7 @@ const data = await state.page.evaluate(async (url) => {
 ```
 
 写盘前用 `read` 重读目标文件头，做多会话校验。
+
 ## 输入参数
 
 | 参数 | 必填 | 说明 | 示例 |
@@ -87,7 +88,7 @@ https://xueqiu.com/statuses/show.json?id={id}
 
 - **⚠️ 限流红线：连续约 40 篇必触发限流**（请求超时无响应，恢复需数分钟且不可预测）
 - 对策：每批 ≤10 篇，批间随机等待 30–60 秒；全量回补历史月份时尤其要分批慢行
-- 限流发生时降级方案：改用 `page.goto()` 逐页访问帖子页面（`https://xueqiu.com/{uid}/{id}`），从 DOM 提取正文，页面访问间隔 ≥800ms
+- 限流发生时降级方案：改用 `state.page.goto()` 逐页访问帖子页面（`https://xueqiu.com/{uid}/{id}`），从 DOM 提取正文，页面访问间隔 ≥800ms
 
 ### 字段提取
 
@@ -158,7 +159,7 @@ publish_date: YYYY-MM-01
 
 ### 年索引（强制同步）
 
-路径：`{archive_dir}/YYYY年索引.md`。**每次更新月文件后必须同步更新对应行**：
+路径：`{archive_dir}/YYYY年索引.md`（输入参数指定了 `index_file` 时以 `index_file` 为准）。**每次更新月文件后必须同步更新对应行**：
 
 ```markdown
 # {author_name}雪球归档：YYYY年
@@ -199,6 +200,7 @@ publish_date: YYYY-MM-01
 需要「持续」而非一次性归档时，用 `schedule_create` 建会话内定时（例如每天 21:00、`Asia/Shanghai`），prompt 内写清 uid / archive_dir / author_name 与增量协议步骤，到点自动执行增量与自检。
 
 ⚠️ 该定时是**会话内提醒**，会话结束即失效；要无人值守须改用系统计划任务（另建脚本）。
+
 ## 提交纪律
 
 - ⚠️ **更新后不主动 commit/push**，等用户明确命令
@@ -217,9 +219,9 @@ git stash pop
 
 | 陷阱 | 后果 | 对策 |
 |------|------|------|
-| Node 直连雪球 API | WAF 拦截返回 textarea 非 JSON | 必须 page.evaluate 内 fetch |
+| Node 直连雪球 API | WAF 拦截返回 textarea 非 JSON | 必须 state.page.evaluate 内 fetch |
 | 详情接口连刷 | ~40 篇触发限流，恢复数分钟 | 批 ≤10 + 批间 30-60s；优先用列表 |
-| 限流后不降级 | 全量回补卡死 | 降级 page.goto 逐页 DOM 提取 |
+| 限流后不降级 | 全量回补卡死 | 降级 state.page.goto 逐页 DOM 提取 |
 | 把回复当原贴收录 | 污染「仅原贴」口径 | 甄别 retweeted_status / 回复结构 |
 | 记录头用 ### | 污染大纲（历史文件旧格式勿模仿） | 加粗行 |
 | 互动数据写入后过期 | 快照误导 | 不记录（新口径） |
