@@ -96,9 +96,8 @@
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: deepseek-official
-    model: deepseek-flash
-    reasoningEffort: high
+    provider: tx-gateway
+    model: gpt-6.1-sol
 - id: session-log-deepseek
   name: "@deepseek-ai/dsh-session-log-deepseek"
   config:
@@ -306,11 +305,11 @@
     autoSummarizeMaxMemories: 5
     autoSummarizeMaxTokens: 2048
     staleAfterDays: 0
-- id: image-gen
-  disabled: true
 - id: web-search-free
   name: dsh-web-search-free
   config:
     tavilyApiKey: |-
       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
       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
+    anysearchApiKey: as_sk_1639094ee019557ac0d94f617c5cb55e
+    tinyfishApiKey: sk-tinyfish-K4ruthmjwphDHrtWQF8VouPJQpYs3Mou
