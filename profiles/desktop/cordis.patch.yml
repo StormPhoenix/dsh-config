@@ -313,3 +313,22 @@
       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
     anysearchApiKey: as_sk_1639094ee019557ac0d94f617c5cb55e
     tinyfishApiKey: sk-tinyfish-K4ruthmjwphDHrtWQF8VouPJQpYs3Mou
+- id: bili-scroll
+  name: dsh-bili-scroll
+  config:
+    enabled: true
+    peakValley: true
+    autoComment: true
+    dmMode: both
+    dmUid: 293629370
+    transcribe: true
+    mentionName: 眉间风止AsYouWish
+    keywords:
+      - 周期
+      - 新番
+      - 葫芦军师
+      - 书法
+    pythonPath: C:\Users\jiaxianwang\.dsh\bili-duty\.venv\Scripts\python.exe
+    workspace: C:\Users\jiaxianwang\.dsh\dsh-bili-scroll
+    reportLevel: brief
+    replyToComments: true
